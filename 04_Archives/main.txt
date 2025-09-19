@@ -1,0 +1,817 @@
+# main.py
+import json
+import os
+import shutil
+import time
+import logging
+from datetime import date, datetime
+from typing import List, Dict, Any
+import pandas as pd
+import numpy as np
+from pykrx import stock
+import base64
+import io
+import hashlib
+import csv
+
+# --- 신규 라이브러리 종속성 ---
+# 그래프 생성을 위해 matplotlib, seaborn 라이브러리가 필요합니다.
+# 설치: pip install matplotlib seaborn
+try:
+    import matplotlib.pyplot as plt
+    import matplotlib.font_manager as fm
+    import seaborn as sns
+except ImportError:
+    print("Warning: 'matplotlib' or 'seaborn' not installed. Please run: pip install matplotlib seaborn")
+    plt = None
+    sns = None
+
+try:
+    from dateutil.relativedelta import relativedelta
+except ImportError:
+    relativedelta = None
+    print("Warning: 'python-dateutil' not installed. pip install python-dateutil")
+
+# --- 로깅 및 Matplotlib 한글 폰트 설정 ---
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+
+def setup_matplotlib_font():
+    """운영체제에 맞는 한글 폰트를 찾아 Matplotlib에 설정"""
+    if plt is None:
+        return
+    # 시스템 폰트 경로 목록
+    font_paths = [
+        '/usr/share/fonts/truetype/nanum/NanumGothic.ttf',  # Linux (Ubuntu)
+        'C:/Windows/Fonts/malgun.ttf',                      # Windows
+        '/System/Library/Fonts/Supplemental/AppleGothic.ttf'  # macOS
+    ]
+    font_name = None
+    for font_path in font_paths:
+        if os.path.exists(font_path):
+            fm.fontManager.addfont(font_path)
+            font_name = fm.FontProperties(fname=font_path).get_name()
+            break
+            
+    if font_name:
+        plt.rc('font', family=font_name)
+        logging.info(f"Matplotlib 한글 폰트 설정 완료: {font_name}")
+    else:
+        logging.warning("한글 폰트를 찾을 수 없어 기본 폰트를 사용합니다.")
+    
+    plt.rc('axes', unicode_minus=False) # 마이너스 부호 깨짐 방지
+
+setup_matplotlib_font()
+
+# ------------------------------------------------------------------------------
+# 안전한 폴더 정리 함수
+# ------------------------------------------------------------------------------
+def safe_clear_folder(path: str, extension: str = None):
+    """
+    폴더 내의 특정 확장자를 가진 파일 또는 모든 파일을 안전하게 삭제.
+    Args:
+        path (str): 정리할 폴더 경로.
+        extension (str, optional): 삭제할 파일의 확장자 (e.g., '.html'). None이면 모든 파일/폴더 삭제.
+    """
+    if not os.path.exists(path):
+        os.makedirs(path, exist_ok=True)
+        return
+
+    for item in os.listdir(path):
+        item_path = os.path.join(path, item)
+        try:
+            if extension is None or item.endswith(extension):
+                if os.path.isfile(item_path) or os.path.islink(item_path):
+                    os.unlink(item_path)
+                elif os.path.isdir(item_path):
+                    shutil.rmtree(item_path)
+        except Exception as e:
+            logging.warning(f"Failed to delete {item_path}. Reason: {e}")
+
+# ==============================================================================
+# 1. 데이터 로더 (Data Loader)
+# ==============================================================================
+class DataLoader:
+    """주식/벤치마크 데이터 다운로드 및 캐싱 담당"""
+    def __init__(self, data_path='data'):
+        self.script_dir = os.path.dirname(os.path.abspath(__file__))
+        self.data_path = os.path.join(self.script_dir, data_path)
+        os.makedirs(self.data_path, exist_ok=True)
+
+    def _coerce_price_df(self, df: pd.DataFrame) -> pd.DataFrame:
+        """데이터프레임의 인덱스와 가격/거래량 컬럼 타입을 올바르게 변환"""
+        if df is None or df.empty:
+            return pd.DataFrame()
+        df.index = pd.to_datetime(df.index.astype(str), errors='coerce')
+        for col in ["Open", "High", "Low", "Close", "Adj Close", "Volume"]:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col].astype(str).str.replace(',', ''), errors='coerce')
+        df = df[~df.index.isna()]
+        return df
+
+    def get_price_data(self, ticker: str, start_date: str, end_date: str) -> pd.DataFrame:
+        """개별 종목 가격 데이터 로드 (캐시 우선 확인)"""
+        clean_ticker = ticker.split('.')[0]
+        fname = os.path.join(self.data_path, f"{clean_ticker}_{start_date}_{end_date}.csv")
+        if os.path.exists(fname):
+            logging.info(f"Using cache for price data: {ticker}")
+            df = pd.read_csv(fname, index_col=0)
+            return self._coerce_price_df(df)
+        
+        logging.info(f"Downloading price data for: {ticker}")
+        df = self._fetch_ticker_history(ticker, start_date, end_date)
+        if not df.empty:
+            df = self._coerce_price_df(df)
+            df.to_csv(fname)
+        return df
+
+    def get_benchmark_data(self, ticker: str, start_date: str, end_date: str) -> pd.DataFrame:
+        """벤치마크 지수 데이터 로드 (캐시 우선 확인)"""
+        fname = os.path.join(self.data_path, f"BENCHMARK_{ticker}_{start_date}_{end_date}.csv")
+        if os.path.exists(fname):
+            logging.info(f"Using cache for benchmark data: {ticker}")
+            df = pd.read_csv(fname, index_col=0)
+            return self._coerce_price_df(df)
+
+        logging.info(f"Downloading benchmark data for: {ticker}")
+        try:
+            df = stock.get_index_ohlcv(start_date.replace('-', ''), end_date.replace('-', ''), ticker)
+            df.rename(columns={'시가':'Open','고가':'High','저가':'Low','종가':'Close','거래량':'Volume'}, inplace=True)
+            df['Adj Close'] = df['Close']
+            df.index.name = 'Date'
+            df = self._coerce_price_df(df)
+            if not df.empty:
+                df.to_csv(fname)
+            return df
+        except Exception as e:
+            logging.error(f"Failed to download benchmark data for {ticker}: {e}")
+            return pd.DataFrame()
+
+    def _fetch_ticker_history(self, ticker: str, start: str, end: str, max_retries=3, pause=1.0) -> pd.DataFrame:
+        """pykrx를 사용해 개별 종목 데이터 다운로드 (재시도 로직 포함)"""
+        ticker_code = ticker.split('.')[0]
+        for attempt in range(1, max_retries + 1):
+            try:
+                df = stock.get_market_ohlcv(start.replace('-', ''), end.replace('-', ''), ticker_code)
+                if df.empty:
+                    return pd.DataFrame()
+                df.rename(columns={'시가': 'Open', '고가': 'High', '저가': 'Low', '종가': 'Close', '거래량': 'Volume'}, inplace=True)
+                df['Adj Close'] = df['Close']
+                df.index.name = 'Date'
+                return self._coerce_price_df(df)
+            except Exception as e:
+                logging.warning(f"Download failed for {ticker} attempt {attempt}: {e}")
+                time.sleep(pause * (2 ** (attempt - 1)))
+        return pd.DataFrame()
+
+# ==============================================================================
+# 2. 지표 계산기 (Indicator Calculator)
+# ==============================================================================
+class IndicatorCalculator:
+    """전략에 필요한 모든 기술적 지표 계산"""
+    def __init__(self, data: pd.DataFrame):
+        self.data = data.copy()
+
+    def calculate_all(self, strategy: Dict) -> pd.DataFrame:
+        """전략 JSON 설정에 따라 모든 지표를 계산"""
+        for indicator in strategy.get('indicators', []):
+            self._calculate_indicator(indicator)
+        self._calculate_atr(strategy)
+        self._calculate_take_profit_indicators(strategy)
+        return self.data.dropna()
+
+    def _calculate_indicator(self, config: Dict):
+        name, type_ = config['name'], config['type']
+        params = config.get('params', {})
+        if type_ == 'SMA':
+            self.data[name] = self.data[params['source']].rolling(window=params['window']).mean()
+        elif type_ == 'CALCULATION':
+            formula = params['formula']
+            for col in self.data.columns:
+                if col in formula:
+                    formula = formula.replace(col, f"self.data['{col}']")
+            self.data[name] = eval(formula)
+
+    def _calculate_atr(self, strategy: Dict):
+        atr_scenario = next((s for s in strategy.get('optimization_config', {}).get('stop_loss_scenarios', []) if s['type']=='ATR'), None)
+        if not atr_scenario: return
+        window = atr_scenario['params']['atr_window']
+        high_low = self.data['High'] - self.data['Low']
+        high_close = np.abs(self.data['High'] - self.data['Close'].shift())
+        low_close = np.abs(self.data['Low'] - self.data['Close'].shift())
+        tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
+        self.data['ATR'] = tr.ewm(alpha=1/window, adjust=False).mean()
+
+    def _calculate_take_profit_indicators(self, strategy: Dict):
+        config = strategy.get('take_profit_config', {})
+        if not config.get('enabled', False): return
+        p = config['params']
+        for window in range(p['window_range_start'], p['window_range_end']+1, p['step']):
+            ma_name = f"SMA_{window}"
+            dir_name = f"{ma_name}_DIR"
+            self.data[ma_name] = self.data[p['source']].rolling(window=window).mean()
+            self.data[dir_name] = (self.data[ma_name].diff() > 0).astype(int)
+
+# ==============================================================================
+# 3. 백테스팅 엔진 (Backtesting Engine)
+# ==============================================================================
+class Backtester:
+    """단일 파라미터 조합에 대한 백테스트 수행"""
+    def __init__(self, data_with_indicators: pd.DataFrame, strategy: Dict):
+        self.data = data_with_indicators
+        self.strategy = strategy
+
+    def run_single_backtest(self, sl_rule: Dict, tp_rule: Dict, initial_capital=1e8) -> Dict:
+        cash = initial_capital
+        position = 0
+        buy_price = 0
+        entry_date = None
+        stop_loss_price = 0
+        ma_dir_confirmed_up = False
+        tp_dir_col = f"SMA_{tp_rule['window']}_DIR" if tp_rule else None
+        trades = []
+        equity_curve = pd.Series(index=self.data.index, dtype=float)
+        
+        for i in range(1, len(self.data)):
+            prev_row = self.data.iloc[i-1]
+            row = self.data.iloc[i]
+            
+            # 현재 자산 가치 기록
+            current_value = cash + (position * row['Close'])
+            equity_curve.iloc[i] = current_value
+
+            # Exit logic
+            if position > 0:
+                sl_triggered = row['Low'] < stop_loss_price
+                tp_triggered = False
+                if tp_dir_col and tp_dir_col in row:
+                    if not ma_dir_confirmed_up and row[tp_dir_col]==1:
+                        ma_dir_confirmed_up = True
+                    elif ma_dir_confirmed_up and row[tp_dir_col]==0:
+                        tp_triggered = True
+                
+                if sl_triggered or tp_triggered:
+                    sell_price = row['Open']
+                    # 손절매가 시가보다 높으면 시가로 매도, 아니면 손절가로 매도
+                    if sl_triggered:
+                        sell_price = min(row['Open'], stop_loss_price)
+
+                    cash += position * sell_price
+                    trades.append({'entry': entry_date, 'exit': row.name, 'profit_pct': (sell_price-buy_price)/buy_price})
+                    position, buy_price, entry_date, ma_dir_confirmed_up = 0,0,None,False
+            
+            # Entry logic
+            if position==0:
+                buy_cond_config = self.strategy['buy_conditions']
+                if self._check_condition(prev_row, buy_cond_config['conditions'][0]):
+                    buy_price = row['Open']
+                    entry_date = row.name
+                    # *** 수정된 부분: 가용 현금 전액 투자 ***
+                    shares_to_buy = int(cash / buy_price) 
+                    if shares_to_buy > 0:
+                        position = shares_to_buy
+                        cash -= position*buy_price
+                        stop_loss_price = self._calculate_stop_loss_price(prev_row, buy_price, sl_rule)
+        
+        # 마지막 날 자산 가치 업데이트
+        if len(equity_curve) > 0 and pd.isna(equity_curve.iloc[-1]):
+             equity_curve.iloc[-1] = cash + (position * self.data['Close'].iloc[-1])
+        
+        if len(equity_curve) > 0:
+            equity_curve.iloc[0] = initial_capital
+            equity_curve = equity_curve.ffill()
+
+        final_value = equity_curve.iloc[-1] if len(equity_curve) > 0 else initial_capital
+        return {'final_value': final_value, 'initial_capital': initial_capital, 'trades': trades, 'equity_curve': equity_curve}
+
+    def _check_condition(self, row: pd.Series, cond: Dict) -> bool:
+        left, op, right = row.get(cond['left']), cond['op'], row.get(cond['right'])
+        if pd.isna(left) or pd.isna(right): return False
+        if op=='<': return left < right
+        if op=='>': return left > right
+        return False
+
+    def _calculate_stop_loss_price(self, prev_row: pd.Series, buy_price: float, sl_rule: Dict) -> float:
+        if not sl_rule: return 0.0
+        if sl_rule['type']=='PREV_DAY_LOW': return prev_row['Low']
+        elif sl_rule['type']=='FIXED_PERCENTAGE': return buy_price*(1-sl_rule['params']['percentage'])
+        elif sl_rule['type']=='ATR': return buy_price - (prev_row['ATR']*sl_rule['params']['multiplier'])
+        return 0.0
+
+# ==============================================================================
+# 4. 최적화 엔진 (Optimizer)
+# ==============================================================================
+class Optimizer:
+    """모든 파라미터 조합에 대해 백테스트를 실행하고 결과 집계"""
+    def __init__(self, data_with_indicators: pd.DataFrame, strategy: Dict):
+        self.data = data_with_indicators
+        self.strategy = strategy
+        self.backtester = Backtester(self.data, self.strategy)
+
+    def run_optimization(self):
+        sl_scenarios = self._generate_sl_scenarios()
+        tp_scenarios = self._generate_tp_scenarios()
+        results = []
+        logging.info(f"Starting optimization: {len(sl_scenarios)*len(tp_scenarios)} scenarios to test...")
+        for sl in sl_scenarios:
+            for tp in tp_scenarios:
+                performance = self.backtester.run_single_backtest(sl, tp)
+                results.append({
+                    'Stop-Loss Rule': sl['name'],
+                    'Take-Profit Rule': tp['name'],
+                    'final_value': performance['final_value'],
+                    'initial_capital': performance['initial_capital'],
+                    'Trades': len(performance['trades']),
+                    'trades': performance['trades'],
+                    'equity_curve': performance['equity_curve']
+                })
+        return results
+
+    def _generate_sl_scenarios(self) -> List[Dict]:
+        scenarios = []
+        config = self.strategy.get('optimization_config', {}).get('stop_loss_scenarios', [])
+        for s in config:
+            if s['type']=='PREV_DAY_LOW': scenarios.append(s)
+            elif s['type']=='FIXED_PERCENTAGE':
+                p = s['params']
+                for val in np.arange(p['range_start'], p['range_end']+p['step'], p['step']):
+                    scenarios.append({'name':f'Fixed {val:.0%}','type':s['type'],'params':{'percentage':val}})
+            elif s['type']=='ATR':
+                p = s['params']
+                for m in np.arange(p['multiplier_range_start'], p['multiplier_range_end']+p['step'], p['step']):
+                    scenarios.append({'name':f'ATR {m:.1f}x','type':s['type'],'params':{'multiplier':m}})
+        return scenarios
+
+    def _generate_tp_scenarios(self) -> List[Dict]:
+        scenarios = []
+        config = self.strategy.get('take_profit_config', {})
+        if not config.get('enabled', False): return [{'name': 'None', 'window': None}]
+        p = config['params']
+        for w in range(p['window_range_start'], p['window_range_end']+1, p['step']):
+            scenarios.append({'name':f'SMA({w}) Dir. Trail','window':w})
+        return scenarios
+
+# ==============================================================================
+# 5. 성과 분석기 (PerformanceAnalyzer)
+# ==============================================================================
+class PerformanceAnalyzer:
+    """백테스트 결과(자산 곡선, 거래 내역)를 바탕으로 각종 성과 지표 계산"""
+    @staticmethod
+    def calculate_all_metrics(result: Dict, data: pd.DataFrame = None, equity_curve: pd.Series = None) -> Dict:
+        """
+        자산곡선 기반 지표(CAGR, MDD, Sharpe)와 거래내역 기반 지표(승률, 손익비 등)를 모두 계산.
+        포트폴리오 분석 시에는 equity_curve와 취합된 거래내역(result['trades'])을 함께 전달.
+        """
+        # 자산 곡선이 명시적으로 제공되면 그것을 사용하고, 아니면 결과 딕셔너리에서 가져옴
+        if equity_curve is None:
+            equity_curve = result.get('equity_curve')
+
+        metrics = {}
+        
+        # --- 자산곡선 기반 지표 ---
+        if equity_curve is not None and not equity_curve.empty:
+            start_val = equity_curve.iloc[0]
+            end_val = equity_curve.iloc[-1]
+            days = (equity_curve.index[-1] - equity_curve.index[0]).days if len(equity_curve.index) > 1 else 0
+            
+            metrics['CAGR'] = ((end_val/start_val)**(365.0/days)-1) * 100 if days > 0 and start_val > 0 else 0
+            
+            peak = equity_curve.cummax()
+            dd = (equity_curve / peak - 1)
+            metrics['MDD'] = dd.min() * 100
+            
+            rets = equity_curve.pct_change().dropna()
+            metrics['Sharpe'] = (rets.mean()/rets.std()*np.sqrt(252)) if rets.std() != 0 else 0
+            metrics['Final P/L %'] = (end_val/start_val - 1)*100
+        else:
+            metrics.update({'CAGR': 0, 'MDD': 0, 'Sharpe': 0, 'Final P/L %': 0})
+
+        # --- 거래내역 기반 지표 ---
+        trades = result.get('trades', [])
+        metrics['Num Trades'] = len(trades)
+        
+        if trades:
+            wins = [t for t in trades if t['profit_pct'] > 0]
+            metrics['WinRate'] = (len(wins) / len(trades)) * 100 if len(trades) > 0 else 0.0
+            
+            gross_profit = sum([t['profit_pct'] for t in trades if t['profit_pct'] > 0])
+            gross_loss = abs(sum([t['profit_pct'] for t in trades if t['profit_pct'] <= 0]))
+            
+            if gross_loss > 0:
+                metrics['ProfitFactor'] = gross_profit / gross_loss
+            else:
+                metrics['ProfitFactor'] = "Undef (No Loss)" # 손실 거래가 없는 경우
+        else:
+            # 거래가 없는 경우
+            metrics['WinRate'] = 0.0
+            metrics['ProfitFactor'] = "N/A"
+            
+        return metrics
+
+# ==============================================================================
+# 6. 리포트 생성기 (ReportGenerator)
+# ==============================================================================
+class ReportGenerator:
+    """개별 종목 및 포트폴리오 종합 리포트(HTML, 터미널) 생성"""
+    def __init__(self, reports_path='reports'):
+        self.reports_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), reports_path)
+        os.makedirs(self.reports_path, exist_ok=True)
+
+    def _convert_fig_to_base64(self, fig) -> str:
+        """Matplotlib figure를 base64 이미지 문자열로 변환"""
+        buf = io.BytesIO()
+        fig.savefig(buf, format='png', bbox_inches='tight')
+        plt.close(fig)
+        return base64.b64encode(buf.getvalue()).decode('utf-8')
+
+    def generate_heatmap(self, results: List[Dict]) -> str:
+        """최적화 결과로 히트맵 생성"""
+        if not results: return ""
+        df = pd.DataFrame(results)
+        try:
+            pivot_df = df.pivot_table(
+                index='Stop-Loss Rule', 
+                columns='Take-Profit Rule', 
+                values='final_value'
+            )
+            fig, ax = plt.subplots(figsize=(12, max(6, len(pivot_df.index)*0.5)))
+            sns.heatmap(pivot_df, annot=True, fmt=',.0f', cmap='viridis', ax=ax)
+            ax.set_title('Optimization Heatmap (Final Equity)')
+            return self._convert_fig_to_base64(fig)
+        except Exception as e:
+            logging.error(f"Failed to generate heatmap: {e}")
+            return ""
+
+    def generate_html_report(self, ticker: str, all_results: List[Dict], best_result: Dict, metrics: Dict, benchmark: pd.DataFrame, strategy: Dict):
+        """개별 종목의 상세 HTML 리포트 생성"""
+        equity_curve = best_result['equity_curve']
+        
+        fig, ax = plt.subplots(figsize=(12, 6))
+        ax.plot(equity_curve.index, equity_curve.values, label='Strategy Equity', color='blue')
+        if not benchmark.empty:
+            bench_curve = benchmark['Close']/benchmark['Close'].iloc[0]*equity_curve.iloc[0]
+            ax.plot(bench_curve.index, bench_curve.values, label='Benchmark (KOSPI)', color='grey', linestyle='--')
+        ax.set_title(f'Performance Report: {ticker}')
+        ax.legend()
+        img_base64 = self._convert_fig_to_base64(fig)
+
+        heatmap_html = ""
+        if strategy.get('optimization_config', {}).get('enabled', False):
+            heatmap_img = self.generate_heatmap(all_results)
+            if heatmap_img:
+                heatmap_html = f'<h2>파라미터 최적화 히트맵</h2><img src="data:image/png;base64,{heatmap_img}" />'
+        
+        # 지표 이름과 단위 매핑
+        metrics_map = {
+            'CAGR': 'CAGR (%, 연)', 'MDD': 'MDD (%)', 'Sharpe': 'Sharpe Ratio',
+            'WinRate': '승률 (%)', 'ProfitFactor': '손익비', 'Num Trades': '총 거래 횟수'
+        }
+        metrics_table_html = "<table><tr><th>지표</th><th>값</th></tr>"
+        for key, name in metrics_map.items():
+            value = metrics.get(key)
+            if isinstance(value, float):
+                # 승률만 소수점 2자리, 나머지는 그대로
+                if key == 'WinRate':
+                    metrics_table_html += f"<tr><td>{name}</td><td>{value:.2f}%</td></tr>"
+                else:
+                    metrics_table_html += f"<tr><td>{name}</td><td>{value:.2f}</td></tr>"
+            else:
+                metrics_table_html += f"<tr><td>{name}</td><td>{value}</td></tr>"
+        metrics_table_html += "</table>"
+
+
+        html = f"""
+        <html><head><meta charset='utf-8'><title>Report {ticker}</title>
+        <style>body{{font-family:sans-serif;}} table{{border-collapse:collapse;}} th,td{{padding:8px;border:1px solid #ddd;}}</style>
+        </head><body>
+        <h1>성과 리포트: {ticker}</h1>
+        <h2>최적 조합: {best_result['Stop-Loss Rule']} & {best_result['Take-Profit Rule']}</h2>
+        <h2>핵심 지표</h2>
+        {metrics_table_html}
+        <h2>자산 곡선 (Equity Curve)</h2>
+        <img src="data:image/png;base64,{img_base64}" />
+        {heatmap_html}
+        </body></html>
+        """
+        out_path = os.path.join(self.reports_path, f"{ticker}_report.html")
+        with open(out_path,'w',encoding='utf-8') as f:
+            f.write(html)
+        logging.info(f"Report generated: {out_path}")
+
+    def generate_portfolio_summary_report(self, portfolio_metrics: Dict, portfolio_equity: pd.Series, individual_results: List[Dict], benchmark: pd.DataFrame, annual_df: pd.DataFrame):
+        """포트폴리오 종합 분석 HTML 리포트 생성"""
+        # Part 1: 종합 성과 그래프 및 지표
+        fig1, ax1 = plt.subplots(figsize=(12, 6))
+        ax1.plot(portfolio_equity.index, portfolio_equity.values, label='Portfolio Equity')
+        bench_equity = benchmark['Close'] / benchmark['Close'].iloc[0] * portfolio_equity.iloc[0]
+        ax1.plot(bench_equity.index, bench_equity.values, label='Benchmark (KOSPI)', linestyle='--')
+        ax1.set_title('포트폴리오 누적 수익률 곡선 (Portfolio vs KOSPI)')
+        ax1.legend()
+        img1_b64 = self._convert_fig_to_base64(fig1)
+
+        metrics_map = {
+            'CAGR': 'CAGR (%, 연)', 'MDD': 'MDD (%)', 'Sharpe': 'Sharpe Ratio',
+            'WinRate': '승률 (%)', 'ProfitFactor': '손익비 (전체 거래 기준)',
+            'Final P/L %': '누적 수익률 (%)', 'Num Trades': '총 거래 횟수'
+        }
+        metrics_html = "<table><tr><th>지표</th><th>값</th></tr>"
+        for key, name in metrics_map.items():
+            value = portfolio_metrics.get(key)
+            if isinstance(value, float):
+                 if key == 'WinRate':
+                     metrics_html += f"<tr><td>{name}</td><td>{value:.2f}%</td></tr>"
+                 else:
+                     metrics_html += f"<tr><td>{name}</td><td>{value:.2f}</td></tr>"
+            else:
+                metrics_html += f"<tr><td>{name}</td><td>{value}</td></tr>"
+        metrics_html += "</table>"
+        
+        # *** 수정된 부분: 투자 규칙 설명 변경 ***
+        desc_html = "<p style='font-size: smaller; color: grey;'><i>전략 기본 규칙: 신규 매수 신호 발생 시, 가용 현금 전액을 해당 종목에 투자합니다. 포트폴리오 성과는 개별 종목 성과의 산술 평균입니다.</i></p>"
+
+        # Part 2: 연도별 성과
+        def style_excess_return(val):
+            color = '#0000FF' if val > 0 else '#FF0000' if val < 0 else 'black'
+            return f'color: {color}'
+
+        annual_styled = annual_df.style.format('{:+.2f}%').map(style_excess_return, subset=['초과 성과 (Portfolio - KOSPI)'])
+        annual_html = annual_styled.to_html().replace('<table border="1" class="dataframe">','<table>')
+        
+        fig2, ax2 = plt.subplots(figsize=(12, 6))
+        annual_df.plot(kind='bar', y=['Portfolio', 'Benchmark'], ax=ax2)
+        ax2.set_title('연도별 수익률 비교 (Annual Returns)')
+        ax2.set_ylabel('Return (%)')
+        ax2.tick_params(axis='x', rotation=45)
+        img2_b64 = self._convert_fig_to_base64(fig2)
+        
+        # Part 3: 개별 종목 요약
+        individual_html = "<table><tr><th>종목</th><th>CAGR(%)</th><th>MDD(%)</th><th>Sharpe</th><th>거래 수</th><th>최적 SL 규칙</th><th>최적 TP 규칙</th></tr>"
+        for res in sorted(individual_results, key=lambda x: x['metrics']['CAGR'], reverse=True):
+            individual_html += f"""
+            <tr>
+                <td>{res['ticker']}</td>
+                <td>{res['metrics']['CAGR']:.2f}</td>
+                <td>{res['metrics']['MDD']:.2f}</td>
+                <td>{res['metrics']['Sharpe']:.2f}</td>
+                <td>{res['metrics']['Num Trades']}</td>
+                <td>{res['best_result']['Stop-Loss Rule']}</td>
+                <td>{res['best_result']['Take-Profit Rule']}</td>
+            </tr>"""
+        individual_html += "</table>"
+        
+        # 최종 HTML 조합
+        html = f"""
+        <html><head><meta charset='utf-8'><title>Portfolio Summary</title>
+        <style>body{{font-family:sans-serif;}} table{{border-collapse:collapse; margin-bottom: 20px;}} th,td{{padding:8px;border:1px solid #ddd; text-align:left;}}</style>
+        </head><body>
+        <h1>포트폴리오 종합 성과 리포트</h1>
+        <h2>Part 1: 종합 성과</h2>{metrics_html}{desc_html}
+        <img src="data:image/png;base64,{img1_b64}" width="800"/>
+        <h2>Part 2: 연도별 성과</h2>{annual_html}
+        <img src="data:image/png;base64,{img2_b64}" width="800"/>
+        <h2>Part 3: 개별 종목 요약</h2>{individual_html}
+        </body></html>"""
+        
+        out_path = os.path.join(self.reports_path, "_Portfolio_Summary_Report.html")
+        with open(out_path, 'w', encoding='utf-8') as f:
+            f.write(html)
+        logging.info(f"Portfolio summary report generated: {out_path}")
+
+    @staticmethod
+    def print_terminal_summary(portfolio_metrics: Dict):
+        """터미널에 포트폴리오 요약 테이블 출력"""
+        print("\n" + "="*50)
+        print("          PORTFOLIO SUMMARY REPORT")
+        print("="*50)
+        
+        metrics_map = {
+            'CAGR': 'CAGR (%, 연)', 'MDD': 'MDD (%)', 'Sharpe': 'Sharpe Ratio',
+            'WinRate': '승률 (%)', 'ProfitFactor': '손익비', 'Num Trades': '총 거래 횟수'
+        }
+        display_data = {}
+        for key, name in metrics_map.items():
+            value = portfolio_metrics.get(key)
+            if isinstance(value, float):
+                if key == 'WinRate':
+                     display_data[name] = f"{value:.2f}%"
+                else:
+                     display_data[name] = f"{value:.2f}"
+            else:
+                display_data[name] = value
+
+        df = pd.DataFrame.from_dict(display_data, orient='index', columns=['Value'])
+        print(df)
+        print("="*50)
+
+    @staticmethod
+    def generate_ai_commentary(portfolio_metrics: Dict, benchmark_metrics: Dict, annual_df: pd.DataFrame, individual_results: List[Dict]) -> str:
+        """성과 지표를 바탕으로 AI 분석 코멘트 생성"""
+        final_comment = ["[AI 종합 분석 코멘트]"]
+        
+        # --- Part 1: 종합 성과 ---
+        part1_comments = ["- [종합 성과]"]
+        cagr_p, cagr_b = portfolio_metrics['CAGR'], benchmark_metrics['CAGR']
+        mdd_p, sharpe_p = portfolio_metrics['MDD'], portfolio_metrics['Sharpe']
+
+        if cagr_p > cagr_b:
+            part1_comments.append(f"포트폴리오의 연평균 복리 수익률(CAGR)은 {cagr_p:.2f}%로, 벤치마크({cagr_b:.2f}%)를 초과하는 우수한 성과를 달성했습니다.")
+        else:
+            part1_comments.append(f"포트폴리오의 연평균 복리 수익률(CAGR)은 {cagr_p:.2f}%로, 벤치마크({cagr_b:.2f}%) 대비 부진한 성과를 보였습니다.")
+        
+        if sharpe_p > 1.0:
+            part1_comments.append(f"특히 위험 대비 수익성 지표인 샤프 지수가 {sharpe_p:.2f}로 매우 높아, 효율적인 위험 관리가 이루어졌음을 시사합니다.")
+        elif sharpe_p < 0.5:
+            part1_comments.append(f"다만 샤프 지수가 {sharpe_p:.2f}로 다소 낮아, 수익률의 변동성 관리에 유의할 필요가 있습니다.")
+        
+        if mdd_p < -20:
+             part1_comments.append(f"최대 낙폭(MDD)은 {mdd_p:.2f}%로, 자산 하락 시 상당한 리스크가 존재할 수 있음을 인지해야 합니다.")
+        
+        final_comment.append("\n".join(part1_comments))
+
+        # --- Part 2: 연도별 성과 분석 ---
+        part2_comments = ["- [연도별 성과 분석]"]
+        if not annual_df.empty:
+            total_years = len(annual_df)
+            outperform_years = (annual_df['초과 성과 (Portfolio - KOSPI)'] > 0).sum()
+            part2_comments.append(f"총 {total_years}년의 투자 기간 중 {outperform_years}년 동안 벤치마크를 상회하는 성과를 기록했습니다.")
+            
+            best_year = annual_df['Portfolio'].idxmax()
+            part2_comments.append(f"가장 성과가 좋았던 해는 {best_year}년({annual_df.loc[best_year, 'Portfolio']:.2f}%)이며,")
+            worst_year = annual_df['Portfolio'].idxmin()
+            part2_comments.append(f"가장 부진했던 해는 {worst_year}년({annual_df.loc[worst_year, 'Portfolio']:.2f}%)이었습니다.")
+        final_comment.append("\n".join(part2_comments))
+        
+        # --- Part 3: 개별 종목 성과 요약 ---
+        part3_comments = ["- [개별 종목 성과 요약]"]
+        if individual_results:
+            sorted_by_cagr = sorted(individual_results, key=lambda x: x['metrics']['CAGR'], reverse=True)
+            best = sorted_by_cagr[0]
+            worst = sorted_by_cagr[-1]
+            part3_comments.append(f"포트폴리오 내에서 '{best['ticker']}' 종목이 CAGR {best['metrics']['CAGR']:.2f}%로 최고의 성과를 보였습니다.")
+            part3_comments.append(f"반면, '{worst['ticker']}' 종목은 CAGR {worst['metrics']['CAGR']:.2f}%로 가장 부진한 성과를 보였습니다.")
+            
+            avg_trades = portfolio_metrics['Num Trades'] / len(individual_results) if individual_results else 0
+            high_trade_tickers = [r['ticker'] for r in individual_results if r['metrics']['Num Trades'] > avg_trades * 1.5]
+            if high_trade_tickers:
+                part3_comments.append(f"({', '.join(high_trade_tickers)} 종목에서 평균보다 유의미하게 많은 거래가 발생했습니다.)")
+        final_comment.append("\n".join(part3_comments))
+
+        disclaimer = (
+            "\n\n[법적 고지 사항]\n"
+            "본 분석은 과거 데이터를 기반으로 한 시뮬레이션 결과이며, 미래의 수익을 보장하지 않습니다. "
+            "모든 투자 결정에 대한 최종 책임은 투자자 본인에게 있습니다."
+        )
+        return "\n\n".join(final_comment) + disclaimer
+
+# ==============================================================================
+# 7. 테스트 이력 관리 (History Manager)
+# ==============================================================================
+class HistoryManager:
+    """test_history.csv 파일에 테스트 결과 기록"""
+    def __init__(self, history_file='test_history.csv'):
+        self.history_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), history_file)
+        self.headers = [
+            'Timestamp', 'Strategy File', 'Strategy Hash', 'Tickers', 
+            'Portfolio CAGR', 'Portfolio MDD', 'Portfolio Sharpe'
+        ]
+
+    def _get_strategy_hash(self, file_path: str) -> str:
+        """파일 내용 기반의 SHA256 해시 생성"""
+        hasher = hashlib.sha256()
+        with open(file_path, 'rb') as f:
+            buf = f.read()
+            hasher.update(buf)
+        return hasher.hexdigest()
+
+    def update_history(self, strategy_file_path: str, tickers: List[str], portfolio_metrics: Dict):
+        """CSV 파일에 테스트 결과 한 줄 추가"""
+        if not os.path.exists(self.history_file):
+            with open(self.history_file, 'w', newline='', encoding='utf-8') as f:
+                writer = csv.writer(f)
+                writer.writerow(self.headers)
+        
+        new_row = {
+            'Timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'Strategy File': os.path.basename(strategy_file_path),
+            'Strategy Hash': self._get_strategy_hash(strategy_file_path),
+            'Tickers': ', '.join(tickers),
+            'Portfolio CAGR': f"{portfolio_metrics['CAGR']:.2f}",
+            'Portfolio MDD': f"{portfolio_metrics['MDD']:.2f}",
+            'Portfolio Sharpe': f"{portfolio_metrics['Sharpe']:.2f}"
+        }
+
+        with open(self.history_file, 'a', newline='', encoding='utf-8') as f:
+            writer = csv.DictWriter(f, fieldnames=self.headers)
+            writer.writerow(new_row)
+        logging.info(f"Test history updated in {self.history_file}")
+
+# ==============================================================================
+# 메인 실행 블록
+# ==============================================================================
+if __name__ == "__main__":
+    try:
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+
+        # --- 환경 초기화 ---
+        safe_clear_folder(os.path.join(base_dir, 'data'))
+        logging.info("Cleared data folder.")
+        safe_clear_folder(os.path.join(base_dir, 'reports'), extension='.html')
+        logging.info("Cleared .html files in reports folder.")
+
+        # --- 설정 로드 ---
+        config_path = os.path.join(base_dir,'config.json')
+        strategy_file_path = os.path.join(base_dir,'strategies','envelope_final_strategy.json')
+        with open(config_path,'r',encoding='utf-8') as f: app_config = json.load(f)
+        with open(strategy_file_path,'r',encoding='utf-8') as f: strategy_config = json.load(f)
+
+        # --- 날짜 및 종목 설정 ---
+        tickers = app_config.get('tickers',[]) # 3개 종목 제한 제거
+        end_date_obj = date.today() if app_config.get('end_date')=='today' else date.fromisoformat(app_config['end_date'])
+        if relativedelta and app_config.get('start_date')=='5_years_ago':
+            start_date_obj = end_date_obj - relativedelta(years=5)
+        else:
+            start_date_obj = date.fromisoformat(app_config['start_date'])
+        start_date, end_date = start_date_obj.isoformat(), end_date_obj.isoformat()
+
+        # --- 모듈 인스턴스화 ---
+        data_loader = DataLoader()
+        report_gen = ReportGenerator()
+        history_manager = HistoryManager()
+        
+        # --- 벤치마크 데이터 로드 ---
+        benchmark_data = data_loader.get_benchmark_data('1001', start_date, end_date) # KOSPI
+
+        # --- 개별 종목 백테스팅 및 최적화 루프 ---
+        all_individual_results = []
+        for ticker in tickers:
+            logging.info(f"--- 최적화 시작: {ticker} ---")
+            price_data = data_loader.get_price_data(ticker, start_date, end_date)
+            if price_data.empty:
+                logging.warning(f"No data for {ticker}, skipping.")
+                continue
+            
+            indicator_calc = IndicatorCalculator(price_data)
+            data_with_ind = indicator_calc.calculate_all(strategy_config)
+            
+            optimizer = Optimizer(data_with_ind, strategy_config)
+            results = optimizer.run_optimization()
+            if not results:
+                logging.warning(f"Optimization yielded no results for {ticker}, skipping.")
+                continue
+
+            best_result = max(results, key=lambda x: x['final_value'])
+            metrics = PerformanceAnalyzer.calculate_all_metrics(best_result, data_with_ind)
+            
+            all_individual_results.append({
+                'ticker': ticker,
+                'best_result': best_result,
+                'metrics': metrics,
+                'equity_curve': best_result['equity_curve']
+            })
+
+            # 개별 종목 리포트 생성
+            report_gen.generate_html_report(ticker, results, best_result, metrics, benchmark_data, strategy_config)
+
+        # --- 포트폴리오 종합 분석 ---
+        if all_individual_results:
+            # 1. 포트폴리오 자산 곡선 계산 (일별 수익률 평균)
+            all_returns = pd.concat([res['equity_curve'].pct_change() for res in all_individual_results], axis=1)
+            portfolio_daily_returns = all_returns.mean(axis=1).fillna(0)
+            portfolio_equity_curve = (1 + portfolio_daily_returns).cumprod() * 1e8 # 초기 자본금 기준으로 환산
+            
+            # 2. 포트폴리오 성과 지표 계산
+            # 2.1. 모든 개별 거래 내역 취합
+            all_trades = []
+            for res in all_individual_results:
+                all_trades.extend(res['best_result']['trades'])
+            
+            # 2.2. 취합된 거래내역과 자산곡선을 사용하여 포트폴리오 지표 계산
+            portfolio_result_summary = {'trades': all_trades}
+            portfolio_metrics = PerformanceAnalyzer.calculate_all_metrics(portfolio_result_summary, equity_curve=portfolio_equity_curve)
+            
+            # 2.3 벤치마크 지표 계산
+            benchmark_metrics = PerformanceAnalyzer.calculate_all_metrics({'trades': []}, equity_curve=benchmark_data['Close'])
+            
+            # 3. 리포트 생성을 위한 데이터 가공 (연도별 성과)
+            bench_equity = benchmark_data['Close'] / benchmark_data['Close'].iloc[0] * portfolio_equity_curve.iloc[0]
+            portfolio_annual = portfolio_equity_curve.resample('YE').last().pct_change().dropna() * 100
+            benchmark_annual = bench_equity.resample('YE').last().pct_change().dropna() * 100
+            annual_df = pd.DataFrame({'Portfolio': portfolio_annual, 'Benchmark': benchmark_annual})
+            if not annual_df.empty:
+                annual_df.index = annual_df.index.year
+                annual_df['초과 성과 (Portfolio - KOSPI)'] = annual_df['Portfolio'] - annual_df['Benchmark']
+
+            # 4. 종합 리포트 생성 (HTML & 터미널)
+            report_gen.generate_portfolio_summary_report(portfolio_metrics, portfolio_equity_curve, all_individual_results, benchmark_data, annual_df)
+            report_gen.print_terminal_summary(portfolio_metrics)
+            
+            # 5. AI 코멘트 생성 및 출력
+            ai_comment = report_gen.generate_ai_commentary(portfolio_metrics, benchmark_metrics, annual_df, all_individual_results)
+            print(ai_comment)
+
+            # 6. 테스트 이력 업데이트
+            history_manager.update_history(strategy_file_path, tickers, portfolio_metrics)
+        else:
+            logging.warning("No successful backtests were run. Skipping portfolio analysis.")
+
+    except Exception as e:
+        logging.error(f"Fatal error in main execution: {e}", exc_info=True)

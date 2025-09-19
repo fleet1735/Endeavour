@@ -1,0 +1,17 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Endeavour: Python 실행 (UTF-8)",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            // --- 아래 두 줄이 핵심입니다 ---
+            "cwd": "${fileDirname}",
+            "env": {
+                "PYTHONIOENCODING": "utf-8"
+            }
+        }
+    ]
+}

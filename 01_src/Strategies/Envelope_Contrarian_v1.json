@@ -1,0 +1,30 @@
+{
+  "strategy_name": "Envelope_Contrarian_Strategy_v2",
+  "author": "Commander & Gemini",
+  "description": "[v2 호환성 테스트] 엔벨로프 역추세. 20-10 하단선 3% 근접 시 매수, 7% 수익 시 매도.",
+  "universe_filters": { "exclude": [] },
+  "indicators": [
+    { "name": "SMA20", "type": "SMA", "params": { "source": "Close", "window": 20 }},
+    { "name": "EnvelopeLower20_10", "type": "CALCULATION", "params": { "formula": "SMA20 * (1 - 0.10)" }}
+  ],
+  "entry_rules": {
+    "initial_entry": {
+      "name": "Envelope_Entry",
+      "logic": "AND",
+      "conditions": [
+        { "left": "Close", "op": "<=", "right": "EnvelopeLower20_10 * 1.03" }
+      ]
+    }
+  },
+  "exit_rules": {
+    "take_profit": {
+      "name": "Take_Profit_7_Percent",
+      "logic": "OR",
+      "conditions": [
+        { "left": "Close", "op": ">=", "right": "average_entry_price * 1.07" }
+      ]
+    },
+    "stop_loss": { "name": "No_Stop_Loss", "logic": "AND", "conditions": [] }
+  },
+  "optimization_config": { "enabled": false }
+}
