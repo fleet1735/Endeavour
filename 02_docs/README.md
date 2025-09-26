@@ -1,4 +1,4 @@
-## 📄 README.md (Phase-1 단순화 반영 전체 내용)
+## 📄 README.md (업데이트 반영 전체 내용)
 
 ```markdown
 # Endeavour Project
@@ -52,10 +52,16 @@ markdown
 
 ## 로드맵
 
+### Big Picture
 0. Phase-1 단순화 구조 확정 (2025-09-26)
-1. 킥오프: SMA 크로스 JSON 스모크.
-2. 데이터 확보: yfinance, pykrx 보조 설계.
-3. JSON/룰엔진 구축.
-4. 프로토타입(backtesting.py).
-5. 프로덕션(Backtrader).
-6. 확장(VectorBT, 전략군 확대).
+1. 프로토타입 MVP
+2. 기능 확장
+3. 현실성 강화
+4. 고급화
+
+### Iteration Plan
+- Iteration 1: 데이터 핸들러 → 3종목 CSV 확보
+- Iteration 2: 전략 파서 → SMA_Cross 신호 로그
+- Iteration 3: 엔진 실행 → trades.csv/summary.csv 생성
+- Iteration 4: 성과 리포트 → 지표 7종 + 연도별 테이블
+- Iteration 5: 병렬화 → 40종목 완주

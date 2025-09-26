@@ -13,6 +13,7 @@
 - **유연성**: 전략을 JSON 선언형 구조로 정의 → 누구나 쉽게 전략 추가/수정 가능.
 - **현실성**: 실제 시장 체결과 유사한 규칙(T+1 시가 체결, 수수료/슬리피지 반영) 적용.
 - **확장성**: 한국시장 → 해외시장까지 확장 가능(yfinance, pykrx 병행).
+- **개발 방식**: Iterative(반복) + Incremental(점진) 개발 결합 → 기능 단위로 나누어 짧은 주기마다 완성도를 높임.
 
 ## 3. 프로젝트 연혁
 - **1차 시도 (Gemini)**: 전체 코드를 한 번에 제시, 의도와 불일치, 기초공사 실패로 중단.
@@ -132,16 +133,24 @@ Endeavour/
 주요 마일스톤마다 커밋 요청: JSON 스키마 확정, 프로토타입 백테스트 성공, Backtrader 파서 작동 등.
 
 13. 단계별 로드맵
-Phase-1 단순화 구조 확정: 불필요한 세분화 제거, 5개 축 유지.
+Big Picture (Phase 기준)
+Phase-1 단순화 구조 확정
 
-킥오프: SMA 크로스 예제 JSON으로 스모크 테스트.
+프로토타입 MVP (데이터, 전략 파서, SMA 크로스 실행, 리포트)
 
-데이터 확보: yfinance 파이프라인, pykrx 보조 설계.
+기능 확장 (추가 전략, 병렬 처리, 리포트 고도화)
 
-전략 JSON/룰엔진: 스키마와 파서 구현.
+현실성 강화 (pykrx, 체결 규칙, 자본배분)
 
-프로토타입 엔진: backtesting.py 검증.
+고급화 (Backtrader, VectorBT, 포트폴리오 확장)
 
-프로덕션 엔진: Backtrader 전환, 수수료/슬리피지 반영.
+Iteration Plan (짧은 주기 반복)
+Iteration 1: 데이터 핸들러(yfinance 캐시) → DoD: 3종목 CSV 확보
 
-확장: VectorBT로 대량 파라미터 실험, 전략군 확대.
+Iteration 2: 전략 파서(JSON 스키마) → DoD: SMA_Cross 신호 로그
+
+Iteration 3: 엔진 실행(루프) → DoD: trades.csv/summary.csv 생성
+
+Iteration 4: 성과 리포트(지표 7종 + 연도별 테이블)
+
+Iteration 5: 병렬화(concurrent.futures) → DoD: 40종목 완주
