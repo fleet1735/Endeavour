@@ -1,0 +1,5 @@
+cd D:\GoogleDrive\Endeavour
+python -m 01_src.engines.parallel_runner
+
+cd D:\GoogleDrive\Endeavour
+python -m 01_src.engines.parallel_runner

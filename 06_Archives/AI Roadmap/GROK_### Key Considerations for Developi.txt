@@ -1,0 +1,193 @@
+### Key Considerations for Developing a Flexible Backtesting Program
+- Research suggests that backtesting.py is a solid starting point for simple, fast backtesting, but alternatives like VectorBT or Backtrader may offer better long-term support and features for multi-stock testing and complex strategies, given backtesting.py's limited updates since 2021.
+- Implementing strategies via a modular JSON schema appears feasible and promotes flexibility, allowing declarative, multi-layered definitions that can be parsed into executable code—examples from trading communities show this enables quick iteration without hardcoding.
+- Your idea of allocating 100% capital per buy signal aligns with isolating stock selection effects by excluding money management, though it may overestimate real-world performance due to ignoring diversification risks; a suggested enhancement is to make position sizing configurable in the code for future extensibility.
+- For KOSPI/KOSDAQ data, libraries like yfinance or financialdatapy can fetch 5-year daily historical data reliably, supporting universal testing across multiple stocks.
+- Performance metrics such as profitability, stability (e.g., max drawdown), win rate, profit factor, and Sharpe ratio can be computed standardly, with interactive charts via Plotly or Matplotlib ensuring intuitive interpretation.
+- The roadmap below provides a phased plan with Python code snippets, designed for AI-assisted implementation—focus on modularity to handle diverse strategies derived from media sources.
+
+#### Evaluation of Your 100% Capital Allocation Approach
+Your proposal to invest 100% of capital on each buy signal effectively isolates the strategy's stock selection logic from money management variables, which aligns with your goal of evaluating pure signal efficacy. This simplifies backtesting by avoiding complexities like position scaling or risk adjustments, making it easier to attribute results directly to the trading rules. However, evidence from trading literature indicates potential drawbacks: it assumes unlimited liquidity and ignores real-world factors like transaction costs, slippage, or opportunity costs from holding a single position. In volatile markets like KOSPI/KOSDAQ, this could amplify drawdowns, leading to unrealistic performance estimates. A better alternative, if openness to minor tweaks exists, is to implement a configurable position sizing parameter (e.g., default to 100% but allow fractions for sensitivity testing). This maintains your focus while enabling robustness checks without full money management integration.
+
+#### Recommended Backtesting Library
+While backtesting.py is user-friendly for basic validation (with built-in metrics and visualizations), its inactivity raises maintenance concerns. VectorBT is a stronger recommendation for your needs: it's actively maintained (latest updates in 2024-2025), excels in vectorized operations for speed on multiple stocks, supports custom indicators, and integrates well with Pandas for flexible data handling. It also allows easy computation of metrics like Sharpe ratio and interactive plotting. If preferring an event-driven approach for more realism, Backtrader offers greater customization for multi-asset testing. Proceed with backtesting.py for initial prototyping, but plan a migration path.
+
+#### High-Level Roadmap Overview
+The plan is structured in phases for iterative development, emphasizing flexibility via JSON-based strategies. Use Python 3.10+ with libraries like pandas, numpy, yfinance (for data), jsonschema (for validation), vectorbt (for backtesting), and plotly (for charts). Total timeline: 4-6 weeks for a MVP, assuming part-time effort.
+
+---
+
+### Comprehensive Guide to Building a Modular Backtesting System for Stock Trading Strategies
+
+This detailed survey outlines the full conceptual and technical framework for developing your backtesting program as the first phase of an automated trading system. It focuses on creating a "portfolio of techniques" (not assets), where strategies are derived from various sources (e.g., YouTube videos, PDFs) and tested for universal profitability across KOSPI and KOSDAQ stocks. The system prioritizes flexibility through a declarative JSON schema for strategies, enabling multi-layered, modular definitions that can represent complex rules hierarchically (e.g., entry conditions nested under indicators). Backtesting will use 5 years of daily (OHLCV) data to assess if strategies show consistent returns, acknowledging that past performance doesn't guarantee future results but serves as a baseline filter—strategies failing historically are unlikely to succeed prospectively.
+
+The program must ensure accuracy by cross-verifying results (e.g., via manual spot-checks or alternative libraries), compute standard metrics (profitability via total return/CAGR, stability via max drawdown/volatility, win rate, profit factor/profit-loss ratio, Sharpe ratio assuming risk-free rate of ~3% for Korea), and output intuitive results including individual stock simulations, aggregated portfolios, and period-based breakdowns (e.g., yearly/quarterly). Interactive charts (e.g., equity curves, trade logs) will aid interpretation. Money management is excluded to focus on selection effects, with 100% allocation per signal as default—evaluated below with alternatives.
+
+#### Core Design Principles
+- **Flexibility and Modularity**: Strategies are defined in JSON files with a schema allowing declarative structures (e.g., {"indicators": {"sma": {"period": 20}}, "entry": {"condition": "close > sma"}}). This supports multi-layer hierarchies (e.g., nested AND/OR logic) and easy extraction from media via manual or AI-assisted rule parsing.
+- **Data Scope**: Test on a universe of KOSPI/KOSDAQ stocks (e.g., top 100 by market cap for feasibility). Use 5-year daily data to check "universal" profitability—aggregate results across stocks to identify robust strategies.
+- **Accuracy Assurance**: Validate data integrity (e.g., handle missing values), use vectorized operations to avoid loops/errors, and compare outputs with known benchmarks (e.g., buy-and-hold on KOSPI index).
+- **Exclusions and Assumptions**: No transaction costs/slippage initially (add as config later). 100% allocation isolates selection but risks overstatement; implement as fixed but configurable.
+- **Output Format**: Per-stock results (trades, equity curve), aggregate (portfolio metrics), period breakdowns (e.g., yearly returns table). Interactive charts for zooming/inspecting.
+
+#### Evaluation of 100% Capital Allocation
+As proposed, allocating full capital per buy signal simplifies testing by focusing solely on entry/exit rules' effectiveness, bypassing diversification or scaling. This is valid for your intent, as it treats each signal as an all-in bet, highlighting pure alpha from selection. Pros: Easy implementation, clear attribution of returns to strategy logic. Cons: Unrealistic in practice, as it exposes the portfolio to single-stock volatility (e.g., a 20% drop wipes out gains), ignores concurrent signals across stocks, and may inflate metrics like Sharpe by not accounting for idle capital. Literature on position sizing emphasizes risk control: without it, backtests can show high returns but catastrophic drawdowns. Suggestion: Default to 100%, but add a JSON parameter (e.g., "position_size": 1.0) for easy adjustment to, say, equal-weighting across signals (e.g., divide capital by number of active positions). This enhances flexibility without complicating core tests—implement as an optional override.
+
+#### Library Recommendations and Rationale
+Your choice of backtesting.py is reasonable for quick prototyping: it's simple, fast, and supports key features like custom strategies, metrics (including Sharpe), and Plotly charts. However, reviews highlight cons like inactivity (last update Dec 2021), limited multi-asset handling, and potential bugs in edge cases. Better alternatives:
+- **VectorBT**: Pros—Vectorized for speed on large datasets/multiple stocks, active development (2024+ updates), built-in optimizer, comprehensive metrics, easy JSON integration via Pandas. Cons—Steeper learning curve but worth it for scalability.
+- **Backtrader**: Pros—Event-driven for realistic simulation, excellent for multi-stock portfolios, extensible. Cons—More verbose code.
+Recommendation: Start with VectorBT for your needs, as it handles universal testing efficiently. Use backtesting.py for initial validation, then migrate.
+
+For data: yfinance for free KOSPI/KOSDAQ fetches (e.g., tickers like '005930.KS' for Samsung). Alternatives: financialdatapy or pandas_datareader with Naver Finance for robustness.
+
+#### Implementation Roadmap
+This phased plan includes Python code snippets for AI reference. Structure the project as: `/src` (core modules), `/strategies` (JSON files), `/data` (cached CSVs), `/tests` (validation scripts). Use virtualenv, requirements.txt with: pandas, numpy, yfinance, vectorbt, jsonschema, plotly.
+
+**Phase 1: Setup and Data Fetching (1 week)**
+- Fetch/clean 5-year daily data for KOSPI/KOSDAQ universe.
+- Code: Define a data loader module.
+```python
+import yfinance as yf
+import pandas as pd
+from datetime import datetime, timedelta
+
+def fetch_stock_data(tickers, years=5):
+    end_date = datetime.now()
+    start_date = end_date - timedelta(days=365 * years)
+    data = {}
+    for ticker in tickers:  # e.g., ['005930.KS', '035420.KS'] for Samsung, Naver
+        df = yf.download(ticker, start=start_date, end=end_date, interval='1d')
+        df = df[['Open', 'High', 'Low', 'Close', 'Volume']]  # OHLCV
+        df.dropna(inplace=True)  # Handle missing data
+        data[ticker] = df
+    return data
+
+# Example usage
+tickers = ['^KS11', '^KQ11']  # KOSPI and KOSDAQ indices; extend to stocks
+historical_data = fetch_stock_data(tickers)
+pd.to_pickle(historical_data, 'data/korea_stocks.pkl')  # Cache
+```
+
+**Phase 2: JSON Strategy Schema and Parsing (1 week)**
+- Define schema for modular, declarative strategies (validate with jsonschema).
+- Support layers: indicators, conditions, entry/exit rules.
+- Code: Parser to convert JSON to executable functions.
+```python
+import json
+import jsonschema
+from ta.trend import SMAIndicator  # Use ta-lib or implement custom
+
+schema = {
+    "type": "object",
+    "properties": {
+        "name": {"type": "string"},
+        "indicators": {"type": "object"},  # e.g., {"sma_short": {"type": "sma", "period": 10}}
+        "entry": {"type": "object", "properties": {"condition": {"type": "string"}}},  # e.g., "close > sma_short"
+        "exit": {"type": "object"},
+        "position_size": {"type": "number", "default": 1.0}  # Your 100% default
+    },
+    "required": ["name", "entry"]
+}
+
+def parse_strategy(json_path):
+    with open(json_path, 'r') as f:
+        strategy = json.load(f)
+    jsonschema.validate(instance=strategy, schema=schema)
+    
+    def apply_indicators(df, indicators):
+        for name, params in indicators.items():
+            if params['type'] == 'sma':
+                df[name] = SMAIndicator(df['Close'], window=params['period']).sma_indicator()
+        return df
+    
+    def evaluate_condition(df, condition):
+        return eval(condition, {"__builtins__": {}}, df.to_dict('series'))  # Safe eval
+    
+    return apply_indicators, evaluate_condition, strategy
+
+# Example JSON: strategies/moving_average.json
+# {"name": "SMA Crossover", "indicators": {"sma_short": {"type": "sma", "period": 10}, "sma_long": {"type": "sma", "period": 20}},
+#  "entry": {"condition": "sma_short > sma_long"}, "exit": {"condition": "sma_short < sma_long"}}
+```
+
+**Phase 3: Backtesting Engine (1-2 weeks)**
+- Integrate with VectorBT: Simulate trades, compute metrics.
+- Handle multi-stock: Run in parallel, aggregate.
+- Code: Core backtester.
+```python
+import vectorbt as vbt
+import numpy as np
+
+def run_backtest(data_dict, strategy_funcs, position_size=1.0):
+    apply_indicators, evaluate_condition, strategy = strategy_funcs
+    results = {}
+    portfolio_entries, portfolio_exits = [], []
+    
+    for ticker, df in data_dict.items():
+        df = apply_indicators(df, strategy['indicators'])
+        entries = evaluate_condition(df, strategy['entry']['condition'])
+        exits = evaluate_condition(df, strategy['exit']['condition'])
+        
+        pf = vbt.PF.from_signals(df['Close'], entries, exits, size=position_size * np.inf,  # 100% alloc simulation
+                                 freq='1D', fees=0.0)  # No fees initially
+        results[ticker] = pf.stats()  # Includes return, Sharpe, etc.
+        
+        portfolio_entries.append(entries)
+        portfolio_exits.append(exits)
+    
+    # Aggregate portfolio
+    avg_entries = vbt.signals.combine_signals(portfolio_entries, how='any')  # Or 'all' for consensus
+    avg_exits = vbt.signals.combine_signals(portfolio_exits, how='any')
+    portfolio_pf = vbt.PF.from_signals(pd.concat([df['Close'] for df in data_dict.values()], axis=1).mean(axis=1),
+                                       avg_entries.mean(axis=1), avg_exits.mean(axis=1), size=position_size * np.inf)
+    
+    return results, portfolio_pf.stats(), portfolio_pf
+
+# Metrics example: results['005930.KS']['Sharpe Ratio'], etc.
+```
+
+**Phase 4: Metrics, Period Breakdowns, and Visualization (1 week)**
+- Compute/add custom metrics if needed.
+- Period analysis: Split data into years/quarters.
+- Interactive charts: Equity, trades.
+- Code: Visualization module.
+```python
+import plotly.graph_objects as go
+
+def compute_period_performance(pf, periods=['yearly', 'quarterly']):
+    if periods == 'yearly':
+        return pf.returns.resample('Y').sum()  # Yearly returns
+    # Similarly for quarterly: 'Q'
+
+def visualize_results(pf):
+    fig = pf.plot(subplots=['trades', 'cum_returns', 'drawdowns'])
+    fig.show()  # Interactive Plotly
+
+# Additional metrics
+def custom_metrics(pf):
+    win_rate = pf.win_rate()
+    profit_factor = pf.profit_factor()
+    sharpe = pf.sharpe_ratio()
+    return {'Win Rate': win_rate, 'Profit Factor': profit_factor, 'Sharpe': sharpe}
+
+# Output: Individual + aggregate + periods in tables
+pd.DataFrame(results).T  # Table of per-stock metrics
+```
+
+**Phase 5: Testing, Validation, and Extensibility (Ongoing)**
+- Test on sample strategies (e.g., from PDFs/YouTube rules).
+- Validate accuracy: Compare with buy-and-hold benchmark.
+- Extend: Add media rule extraction (manual for now), optimizer for params.
+- Run example: Load JSON, fetch data, run_backtest, visualize.
+
+This framework ensures a robust, AI-friendly base—modular code allows easy iteration. For production, add logging/error handling.
+
+### Key Citations
+- [Best Python Libraries for Algorithmic Trading and Financial Analysis](https://blog.quantinsti.com/python-trading-library/)
+- [Python library-Backtesting](https://www.reddit.com/r/algotrading/comments/1fi83nx/python_librarybacktesting/)
+- [Backtesting.py – An Introductory Guide to Backtesting with Python](https://www.interactivebrokers.com/campus/ibkr-quant-news/backtesting-py-an-introductory-guide-to-backtesting-with-python/)
+- [Position Sizing Strategies for Algo-Traders: A Comprehensive Guide](https://medium.com/%40jpolec_72972/position-sizing-strategies-for-algo-traders-a-comprehensive-guide-c9a8fc2443c8)
+- [financialdatapy - PyPI](https://pypi.org/project/financialdatapy/)
+- [How have you designed your backtesting / trading library?](https://www.reddit.com/r/algotrading/comments/1gvusmt/how_have_you_designed_your_backtesting_trading/)
+- [Backtesting.py on PyPI](https://pypi.org/project/backtesting/)
