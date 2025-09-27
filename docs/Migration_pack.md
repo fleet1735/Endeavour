@@ -50,3 +50,21 @@ markdown
 3. **CI/CD 파이프라인 준비**  
    - GitHub Actions로 테스트 자동화  
    - requirements.txt / pyproject.toml 정리
+
+## 🌟 Vision & Target Deliverable
+
+### 1. 최종 목표 (Vision)
+- 상용 백테스팅/리서치 엔진 이상 수준
+- 모듈형, 확장성, 해외주식 확장 고려
+- Git/GDrive/Docs 일체형 관리
+
+### 2. 중간 산출물 (Milestones)
+- 안정적인 데이터 핸들러 (~300줄, yfinance+pykrx, 캐싱, T-1 영업일 적용)
+- 병렬 백테스트 프로토타입 (Phase 1)
+- 문서 체계 (IPD, CHANGE_LOG, 청사진, Migration_pack)
+
+### 3. 최종 산출물 (Deliverables)
+- 백테스팅 엔진 패키지 (pip 배포 가능 수준)
+- 자동화된 Git+Docs 파이프라인
+- 금융 데이터 연구용 RAG-세컨브레인 연동
+
