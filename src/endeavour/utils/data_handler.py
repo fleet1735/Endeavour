@@ -1,4 +1,4 @@
-﻿# === data_handler.py (Final Full Integrated Version) ===
+﻿# === data_handler.py (FINAL FULL FIXED) ===
 import os
 import logging
 from pathlib import Path
@@ -9,7 +9,7 @@ import pandas as pd
 import holidays
 
 # 버전 정보
-VERSION = "data_handler FINAL FULL | 2025-09-27 (T-1 last business day, yfinance+pykrx unified)"
+VERSION = "data_handler FINAL FULL | 2025-09-27 (yfinance+pykrx fixed, T-1 business day)"
 
 # 디렉토리 설정
 CACHE_DIR = Path("data/cache")
@@ -61,7 +61,8 @@ def fetch_yfinance(ticker, start, end):
 
 def fetch_pykrx(ticker, start, end):
     try:
-        df = stock.get_market_ohlcv_by_date(start, end, ticker.replace(".KS","").replace(".KQ",""))
+        code = ticker.replace(".KS","").replace(".KQ","")
+        df = stock.get_market_ohlcv_by_date(start.replace("-",""), end.replace("-",""), code)
         if df.empty:
             raise ValueError("No data from pykrx")
         df.reset_index(inplace=True)
