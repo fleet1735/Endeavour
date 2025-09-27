@@ -1,4 +1,4 @@
-﻿# === data_handler.py (FINAL FULL FIXED) ===
+﻿# === data_handler.py (FINAL FULL FORCE REPLACE) ===
 import os
 import logging
 from pathlib import Path
@@ -9,7 +9,7 @@ import pandas as pd
 import holidays
 
 # 버전 정보
-VERSION = "data_handler FINAL FULL | 2025-09-27 (yfinance+pykrx fixed, T-1 business day)"
+VERSION = "data_handler FINAL FULL | 2025-09-27 (FORCE REPLACE, yfinance+pykrx fixed, T-1 business day)"
 
 # 디렉토리 설정
 CACHE_DIR = Path("data/cache")
