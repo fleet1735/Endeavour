@@ -4,7 +4,7 @@ from pathlib import Path
 import yfinance as yf
 from pykrx import stock
 # ?? ??
-VERSION = "data_handler FINAL FULL | 2025-09-27"
+VERSION = "data_handler FINAL FULL | 2025-09-27 (data ?? ??)"
 # ???? ?? (04_data ? data)
 CACHE_DIR = Path("data/cache")
 LOG_DIR   = Path("data/logs")
