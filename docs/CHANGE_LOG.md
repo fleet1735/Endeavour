@@ -87,3 +87,9 @@
 - 세션이 바뀌더라도, IPD/CHANGE_LOG/Protocol/청사진/Contract/Template 간 일관성을 반드시 준수해야 합니다.
 - 중복 내용은 제거하고, 역할별 구분(헌법·청사진·운영·이력·핸드오프)을 지키십시오.
 - 필요 시 Migration_pack.md에 사건/변경 사항 기록 후, ChangeLog에 반영하십시오.
+## [2025-10-03 ~ 2025-10-04]
+- docs: 문서 체계 정리 (중복 문서 삭제, Iteration_1_WorkOrder.md 이동, Discipline Notice 삽입)
+- fix: repo_tree 단일화 (docs/repo_tree_latest.txt), 타임스탬프 생성 제거
+- chore: cache 네이밍 정리 (*_None_None.csv 제거)
+- chore: 보안 강화 (API_Key Git 제외, 안전 이동)
+- chore: 로그 관리 체계 구축 (회전/보존 정책 반영)

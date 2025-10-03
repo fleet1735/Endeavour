@@ -84,3 +84,10 @@
 ### 결론
 - 2025-10-03 기준, 리포지토리는 깨끗하게 복구됨.
 - Git 관리 원칙이 IPD/Migration_pack에 반영되었으므로, 동일 사태는 재발하지 않을 것임.
+
+### 🟢 세션 정비 기록 (2025-10-03 ~ 2025-10-04)
+- 문서 체계: Iteration_1_WorkOrder.md → Archives/Legacy_Docs, 중복 문서 삭제, Discipline Notice 삽입
+- repo_tree: docs/repo_tree_latest.txt 단일 유지, 타임스탬프 생성 제거, 루트/누적본 제거
+- 캐시: *_None_None.csv 제거, {ticker}_{start}_{end}.csv 규칙 통일
+- 보안: Archives/API_Key/* Git 추적 제외, .gitignore 등록, D:\SecureKeys로 이동
+- 로그 관리: data/logs 회전({name}_YYYY-MM-DD.log), 30일 보존/180일 삭제, Git 제외

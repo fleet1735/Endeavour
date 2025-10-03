@@ -83,3 +83,7 @@
 - 세션 시작 시 업로드해야 하는 repo_tree는 docs/repo_tree_latest.txt 하나뿐이다.
 - 누적본(repo_tree_YYYYMMDD_HHMM.txt) 생성은 금지한다.
 - repo_trees/ 폴더는 더 이상 사용하지 않는다.
+
+### 🔧 운영 규칙 보강 (2025-10-03 ~ 2025-10-04)
+- repo_tree 관리: docs/repo_tree_latest.txt만 유지, 누적본 생성 금지
+- 로그 관리: data/logs는 Git 추적 제외, 30일 보존 후 archive, 180일 삭제
