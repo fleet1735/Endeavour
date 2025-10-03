@@ -4,4 +4,6 @@ data/cache/*
 data/logs/*
 !reports/**
 # API Keys 제외
-Archives/API_Key/*
+Archives/API_Key/*# ==== System Noise Files (History Cleared) ====
+desktop.ini
+**/desktop.ini
