@@ -1,188 +1,11 @@
-# 📘 IPD (Initial Project Document) – Endeavour
-_최종 갱신: 2025-09-30 (Asia/Seoul)_
+# 📘 IPD (Initial Project Document) – Endeavour_최종 갱신: 2025-10-03 (Asia/Seoul)_## 1. 비전유연한 멀티-전략 백테스팅 엔진을 **상용 수준 품질**로 구축하여 전략 연구·실험의 허브가 되게 한다.## 2. 핵심 철학- **재현성**: 동일 입력 → 동일 결과. 캐시·리포트·로그로 추적 가능.- **유연성**: 전략을 JSON/코드로 선언, 엔진은 해석·검증·실행.- **안정성**: 데이터 품질 검증과 폴백 체계, 자동화 우선.## 3. 표준 폴더 구조src/endeavour/utils/    # 엔진 유틸(데이터 핸들러 등)data/cache/             # 재생성 가능 캐시data/logs/              # 실행 로그reports/data_quality/   # 검증 리포트(csv)docs/                   # 문서(청사진/IPD/CHANGE_LOG 등)Archives/               # 레거시/참고자료## 4. 데이터 전략- 1차: **yfinance**, 2차 폴백: **pykrx**- 스키마: Date, Open, High, Low, Close, Volume- 캐시/로그/리포트 경로: data/cache/, data/logs/, eports/data_quality/- **기준일: T-1 영업일** (주말·공휴일 자동 제외, holidays.KR 사용)- 품질 검증: 결측일/NaN/이상치 체크 → 결과 CSV 리포트 저장## 5. 실행 규칙- 실행: python -m src.utils.data_handler- 금지: sys.path 조작, 임의의 전역 상태 변조- 입출력 인코딩: UTF-8- ※ 세부는 운영 원칙을 따른다.## 6. 브랜치·릴리스 운영- 기본: main(안정), dev(통합), eature/*(단위)- 안정판 태깅: 예) 1.0.0-stable- 커밋 메시지 규칙: eat|fix|refactor|docs|chore: ...## 7. 품질/관측 가능성- 로그: data/logs/data_handler.log- 리포트: eports/data_quality/validation_YYYYMMDD.csv- 캐시 히트/미스, 소스(yfinance/pykrx) 사용 여부, 검증 결과 레벨(OK/WARN/ERROR) 기록## 8. 자동화 원칙- 스크립트는 **한 방에** 실행·검증·Git 반영까지 포함- 대용량/복잡 작업은 단계 분리(안전 커밋 단위 유지)- 인코딩 이슈 예방: PowerShell은 UTF-8, 필요 시 chcp 65001- ※ 세부는 운영 원칙을 따른다.## 9. 보안/비밀정보- 키/토큰은 레포에 저장 금지. .gitignore로 차단, 로컬 .env 사용.## 10. 로드맵- Phase 1: 데이터 인프라 안정화(완료)- Phase 2: 백테스트 엔진 고도화- Phase 3: 전략 라이브러리 확장- Phase 4: 운영·배포 체계 완성## 11. 개발 프로세스 원칙- 모든 자동화/스크립트는 **PowerShell 단일 트랙**에서만 실행한다.- **Here-Doc 자동화**로 붙여넣기 한 번에 파일 생성+커밋까지 완료한다.- 과업은 항상 **테스트 가능한 최소 범위** 단위로 나눈다.- ※ 세부는 운영 원칙을 따른다.---## 운영 원칙 (Execution Governance Rule)- 실행 도구 우선 원칙:  사용자의 지시가 주어지면, 설명이나 추측보다 먼저 실행 도구(file_search, web, python 등)를 사용하여 결과를 확인한다.  실행이 불가능한 경우, 즉시 불가능 사유를 보고한다.  절대로 실행 회피 후 설명으로 대체하지 않는다.- 세션 시작 보고 항목:  1) 프로젝트 세션 여부  2) Drive 검색 도구 활성 여부  3) 실행 우선 규칙 확인- 참고 문서: docs/AI_Operating_Contract.md, docs/AI_Response_Template.md- 작업폴더 가드 (WORKDIR GUARD):  git rev-parse --show-toplevel 명령으로 현재 위치가 Git 루트인지 확인한다.  루트명이 'Endeavour'가 아니면 즉시 중단한다.- 파일 접근은 상대경로를 원칙으로 한다.  Guard가 Git 루트를 보장하기 때문에, IPD.md / Migration_pack.md 등은  절대경로 대신 repoRoot 기반 경로로 안전하게 다룰 수 있다.- 환경 관리 원칙: PowerShell 7 권장, 버전 의존성 발생 시 업그레이드.- 문서 연동 원칙: Migration_pack, IPD, CHANGE_LOG, 프로젝트청사진은 동시 업데이트.- Here-Doc 작성 시 내부에는 절대 코드블럭 태그(\\\ 등)를 넣지 않고,  들여쓰기/주석/순수 텍스트만 사용하여 한 번에 코드 복사가 가능하도록 할 것.- pre-commit 훅: Markdown UTF-8(No BOM)+LF 정규화, 25MB 초과 차단, 로그 기록.- 일회성 스크립트 정리:  프로젝트 실행 과정에서 임시로 생성된 일회성 스크립트(fix_*.py 등)는  AI가 판단하여 Archives/ 폴더로 이동시켜 관리한다.  코드가 정식 반영되면 해당 스크립트는 삭제하거나 보관만 한다.- 일회성 스크립트 정리:  프로젝트 실행 과정에서 임시로 생성된 일회성 스크립트(fix_*.py 등)는  AI가 판단하여 Archives/ 폴더로 이동시켜 관리한다.  코드가 정식 반영되면 해당 스크립트는 삭제하거나 보관만 한다.- CHANGE_LOG 관리 원칙:  CHANGE_LOG.md는 기존 기록을 보존하고, 새로운 항목을 문서 상단에 Append(맨 위 추가) 방식으로 관리한다.- Git 인프라 우선, Drive 후순위. push는 수동.### AI 리마인드 지침 (조건부)- 세션 시작 시, AI는 첫 대화 직후 사용자가 아래 두 파일을 모두 업로드했는지 확인한다:  1. `docs/repo_tree_latest.txt` (PowerShell 실행 시 자동 생성된 최신 repo 트리)  2. `docs/Migration_pack.md` (세션 간 인수인계 문서)- 두 파일이 모두 업로드된 경우: 별도의 리마인드를 하지 않는다.  - 두 파일 중 하나라도 누락된 경우: AI는 즉시 업로드를 요청·리마인드한다.- 목적: 세션 시작 컨텍스트를 안정적으로 확보하면서도 불필요한 중복 안내를 피하기 위함.## ⚠️ 위험 작업 사전 백업 의무### 목적- 삭제/이동/정리/전멸(git objects/refs 등)과 같이 되돌리기 어려운 작업 수행 전, 최신 산출물 보호를 보장한다.### 원칙1. 작업 전에 **워킹 디렉토리 전체 백업**을 확보한다. (예: D:\Backup_Endeavour_YYYYMMDD)2. 백업은 **.git 폴더 제외** 원칙으로 수행한다. (예시 스크립트: obocopy <SRC> <DST> /MIR /XD .git)3. 백업 확보 사실을 확인한 뒤에만 위험 작업을 진행한다.4. 사고 발생 시 **백업본에서 즉시 복원**한다.### 실행 예시 (PowerShell)`powershell = "D:\GoogleDrive\Endeavour" = "D:\Backup_Endeavour_20251003_1703"robocopy   /MIR /XD ".git"# ==== IPD.md 업데이트: 위험 작업 사전 백업 의무 + Windows/Cloud Drive 특수 리스크 ====Set-Location "D:\GoogleDrive\Endeavour"@"## ⚠️ 위험 작업 사전 백업 의무### 목적- 삭제/이동/정리/전멸(git objects/refs 등)과 같이 되돌리기 어려운 작업 수행 전, 최신 산출물 보호를 보장한다.### 원칙1. 작업 전에 **워킹 디렉토리 전체 백업**을 확보한다. (예: D:\Backup_Endeavour_YYYYMMDD)2. 백업은 **.git 폴더 제외** 원칙으로 수행한다. (예: obocopy <SRC> <DST> /MIR /XD .git)3. 백업 확보 사실을 확인한 뒤에만 위험 작업을 진행한다.4. 사고 발생 시 **백업본에서 즉시 복원**한다.### 실행 예시 (PowerShell) = "D:\GoogleDrive\Endeavour" = "D:\Backup_Endeavour_20251003_1703"robocopy   /MIR /XD ".git"---## ⚠️ Windows + Cloud Drive 환경 특수 리스크 관리 (desktop.ini)### 문제 개요- Windows Explorer 및 GoogleDrive/OneDrive 동기화 과정에서 .git/objects/*, .git/refs/* 내부에 desktop.ini가 자동 생성될 수 있음.- Git은 이를 유효한 객체/참조로 오인하여 atal: bad object refs/desktop.ini 등의 오류를 발생시킬 수 있음.### 예방 원칙1. .git 폴더는 **클라우드 동기화 제외** 대상에 등록한다.2. .git 폴더 및 하위 디렉토리를 **숨김 처리**하여 Explorer 접근을 최소화한다.   attrib +h +s .git /s /d3. 정기적으로 무결성 검사를 수행한다.   git fsck --full4. 필요 시 자동 청소 스크립트로 desktop.ini를 전면 제거한다.   Get-ChildItem ".git" -Recurse -Force -Include "desktop.ini" | Remove-Item -Force### 결론- desktop.ini는 Git 저장소에 불필요하고 위험한 파일이므로, **생성 차단** 또는 **주기적 청소**가 필수이다.## ⚠️ 위험 작업 사전 백업 의무- 삭제/이동/정리/전멸(git objects/refs 등)과 같이 되돌리기 어려운 작업 수행 전, 반드시 워킹 디렉토리 전체 백업을 확보한다.- 백업은 .git 폴더 제외 원칙으로 수행한다.- 백업 확보 사실을 확인한 뒤에만 위험 작업을 진행한다.- 사고 발생 시 백업본에서 즉시 복원한다.---## ⚠️ Windows + Cloud Drive 환경 특수 리스크 관리 (desktop.ini)- Windows Explorer 및 GoogleDrive/OneDrive 동기화 과정에서 .git/objects/*, .git/refs/* 내부에 desktop.ini가 자동 생성될 수 있음.- Git은 이를 유효한 객체/참조로 오인하여 atal: bad object refs/desktop.ini 오류를 발생시킬 수 있음.- 예방 조치:  1. .git 폴더는 클라우드 동기화 제외 대상에 등록한다.  2. .git 폴더 및 하위 디렉토리를 숨김 처리한다. (ttrib +h +s .git /s /d)  3. 정기적으로 git fsck --full 무결성 검사를 수행한다.  4. 필요 시 자동 청소 스크립트로 desktop.ini를 제거한다.---
+## 보안/민감정보 관리 (추가 2025-10-03)
 
-## 1. 비전
-유연한 멀티-전략 백테스팅 엔진을 **상용 수준 품질**로 구축하여 전략 연구·실험의 허브가 되게 한다.
+- Archives/API_Key/* 와 같은 민감정보 파일은 Git에 절대 포함하지 않는다.
+- 반드시 .gitignore 에 포함하거나 로컬 안전경로로 이동하여 관리한다.
+- 발견 즉시 CHANGE_LOG에 기록하고 삭제/이동 조치한다.
 
-## 2. 핵심 철학
-- **재현성**: 동일 입력 → 동일 결과. 캐시·리포트·로그로 추적 가능.
-- **유연성**: 전략을 JSON/코드로 선언, 엔진은 해석·검증·실행.
-- **안정성**: 데이터 품질 검증과 폴백 체계, 자동화 우선.
+## 캐시 네이밍 관리 (추가 2025-10-03)
 
-## 3. 표준 폴더 구조
-src/endeavour/utils/    # 엔진 유틸(데이터 핸들러 등)
-data/cache/             # 재생성 가능 캐시
-data/logs/              # 실행 로그
-reports/data_quality/   # 검증 리포트(csv)
-docs/                   # 문서(청사진/IPD/CHANGE_LOG 등)
-Archives/               # 레거시/참고자료
-
-## 4. 데이터 전략
-- 1차: **yfinance**, 2차 폴백: **pykrx**
-- 스키마: Date, Open, High, Low, Close, Volume
-- 캐시/로그/리포트 경로: data/cache/, data/logs/, 
-eports/data_quality/
-- **기준일: T-1 영업일** (주말·공휴일 자동 제외, holidays.KR 사용)
-- 품질 검증: 결측일/NaN/이상치 체크 → 결과 CSV 리포트 저장
-
-## 5. 실행 규칙
-- 실행: python -m src.utils.data_handler
-- 금지: sys.path 조작, 임의의 전역 상태 변조
-- 입출력 인코딩: UTF-8
-- ※ 세부는 운영 원칙을 따른다.
-
-## 6. 브랜치·릴리스 운영
-- 기본: main(안정), dev(통합), eature/*(단위)
-- 안정판 태깅: 예) 1.0.0-stable
-- 커밋 메시지 규칙: eat|fix|refactor|docs|chore: ...
-
-## 7. 품질/관측 가능성
-- 로그: data/logs/data_handler.log
-- 리포트: 
-eports/data_quality/validation_YYYYMMDD.csv
-- 캐시 히트/미스, 소스(yfinance/pykrx) 사용 여부, 검증 결과 레벨(OK/WARN/ERROR) 기록
-
-## 8. 자동화 원칙
-- 스크립트는 **한 방에** 실행·검증·Git 반영까지 포함
-- 대용량/복잡 작업은 단계 분리(안전 커밋 단위 유지)
-- 인코딩 이슈 예방: PowerShell은 UTF-8, 필요 시 chcp 65001
-- ※ 세부는 운영 원칙을 따른다.
-
-## 9. 보안/비밀정보
-- 키/토큰은 레포에 저장 금지. .gitignore로 차단, 로컬 .env 사용.
-
-## 10. 로드맵
-- Phase 1: 데이터 인프라 안정화(완료)
-- Phase 2: 백테스트 엔진 고도화
-- Phase 3: 전략 라이브러리 확장
-- Phase 4: 운영·배포 체계 완성
-
-## 11. 개발 프로세스 원칙
-- 모든 자동화/스크립트는 **PowerShell 단일 트랙**에서만 실행한다.
-- **Here-Doc 자동화**로 붙여넣기 한 번에 파일 생성+커밋까지 완료한다.
-- 과업은 항상 **테스트 가능한 최소 범위** 단위로 나눈다.
-- ※ 세부는 운영 원칙을 따른다.
-
----
-
-## 운영 원칙 (Execution Governance Rule)
-
-- 실행 도구 우선 원칙:
-  사용자의 지시가 주어지면, 설명이나 추측보다 먼저 실행 도구(file_search, web, python 등)를 사용하여 결과를 확인한다.
-  실행이 불가능한 경우, 즉시 불가능 사유를 보고한다.
-  절대로 실행 회피 후 설명으로 대체하지 않는다.
-- 세션 시작 보고 항목:
-  1) 프로젝트 세션 여부
-  2) Drive 검색 도구 활성 여부
-  3) 실행 우선 규칙 확인
-- 참고 문서: docs/AI_Operating_Contract.md, docs/AI_Response_Template.md
-
-- 작업폴더 가드 (WORKDIR GUARD):
-  git rev-parse --show-toplevel 명령으로 현재 위치가 Git 루트인지 확인한다.
-  루트명이 'Endeavour'가 아니면 즉시 중단한다.
-
-- 파일 접근은 상대경로를 원칙으로 한다.
-  Guard가 Git 루트를 보장하기 때문에, IPD.md / Migration_pack.md 등은
-  절대경로 대신 repoRoot 기반 경로로 안전하게 다룰 수 있다.
-
-- 환경 관리 원칙: PowerShell 7 권장, 버전 의존성 발생 시 업그레이드.
-- 문서 연동 원칙: Migration_pack, IPD, CHANGE_LOG, 프로젝트청사진은 동시 업데이트.
-- Here-Doc 작성 시 내부에는 절대 코드블럭 태그(\\\ 등)를 넣지 않고,
-  들여쓰기/주석/순수 텍스트만 사용하여 한 번에 코드 복사가 가능하도록 할 것.
-- pre-commit 훅: Markdown UTF-8(No BOM)+LF 정규화, 25MB 초과 차단, 로그 기록.
-- 일회성 스크립트 정리:
-  프로젝트 실행 과정에서 임시로 생성된 일회성 스크립트(fix_*.py 등)는
-  AI가 판단하여 Archives/ 폴더로 이동시켜 관리한다.
-  코드가 정식 반영되면 해당 스크립트는 삭제하거나 보관만 한다.
-- 일회성 스크립트 정리:
-  프로젝트 실행 과정에서 임시로 생성된 일회성 스크립트(fix_*.py 등)는
-  AI가 판단하여 Archives/ 폴더로 이동시켜 관리한다.
-  코드가 정식 반영되면 해당 스크립트는 삭제하거나 보관만 한다.
-- CHANGE_LOG 관리 원칙:
-  CHANGE_LOG.md는 기존 기록을 보존하고, 새로운 항목을 문서 상단에 Append(맨 위 추가) 방식으로 관리한다.
-- Git 인프라 우선, Drive 후순위. push는 수동.
-
-### AI 리마인드 지침 (조건부)
-
-- 세션 시작 시, AI는 첫 대화 직후 사용자가 아래 두 파일을 모두 업로드했는지 확인한다:
-  1. `docs/repo_tree_latest.txt` (PowerShell 실행 시 자동 생성된 최신 repo 트리)
-  2. `docs/Migration_pack.md` (세션 간 인수인계 문서)
-
-- 두 파일이 모두 업로드된 경우: 별도의 리마인드를 하지 않는다.  
-- 두 파일 중 하나라도 누락된 경우: AI는 즉시 업로드를 요청·리마인드한다.
-
-- 목적: 세션 시작 컨텍스트를 안정적으로 확보하면서도 불필요한 중복 안내를 피하기 위함.
-
-## ⚠️ 위험 작업 사전 백업 의무
-
-### 목적
-- 삭제/이동/정리/전멸(git objects/refs 등)과 같이 되돌리기 어려운 작업 수행 전, 최신 산출물 보호를 보장한다.
-
-### 원칙
-1. 작업 전에 **워킹 디렉토리 전체 백업**을 확보한다. (예: D:\Backup_Endeavour_YYYYMMDD)
-2. 백업은 **.git 폴더 제외** 원칙으로 수행한다. (예시 스크립트: obocopy <SRC> <DST> /MIR /XD .git)
-3. 백업 확보 사실을 확인한 뒤에만 위험 작업을 진행한다.
-4. 사고 발생 시 **백업본에서 즉시 복원**한다.
-
-### 실행 예시 (PowerShell)
-`powershell
- = "D:\GoogleDrive\Endeavour"
- = "D:\Backup_Endeavour_20251003_1703"
-robocopy   /MIR /XD ".git"
-# ==== IPD.md 업데이트: 위험 작업 사전 백업 의무 + Windows/Cloud Drive 특수 리스크 ====
-Set-Location "D:\GoogleDrive\Endeavour"
-
-@"
-## ⚠️ 위험 작업 사전 백업 의무
-
-### 목적
-- 삭제/이동/정리/전멸(git objects/refs 등)과 같이 되돌리기 어려운 작업 수행 전, 최신 산출물 보호를 보장한다.
-
-### 원칙
-1. 작업 전에 **워킹 디렉토리 전체 백업**을 확보한다. (예: D:\Backup_Endeavour_YYYYMMDD)
-2. 백업은 **.git 폴더 제외** 원칙으로 수행한다. (예: obocopy <SRC> <DST> /MIR /XD .git)
-3. 백업 확보 사실을 확인한 뒤에만 위험 작업을 진행한다.
-4. 사고 발생 시 **백업본에서 즉시 복원**한다.
-
-### 실행 예시 (PowerShell)
- = "D:\GoogleDrive\Endeavour"
- = "D:\Backup_Endeavour_20251003_1703"
-robocopy   /MIR /XD ".git"
-
----
-
-## ⚠️ Windows + Cloud Drive 환경 특수 리스크 관리 (desktop.ini)
-
-### 문제 개요
-- Windows Explorer 및 GoogleDrive/OneDrive 동기화 과정에서 .git/objects/*, .git/refs/* 내부에 desktop.ini가 자동 생성될 수 있음.
-- Git은 이를 유효한 객체/참조로 오인하여 atal: bad object refs/desktop.ini 등의 오류를 발생시킬 수 있음.
-
-### 예방 원칙
-1. .git 폴더는 **클라우드 동기화 제외** 대상에 등록한다.
-2. .git 폴더 및 하위 디렉토리를 **숨김 처리**하여 Explorer 접근을 최소화한다.
-   attrib +h +s .git /s /d
-3. 정기적으로 무결성 검사를 수행한다.
-   git fsck --full
-4. 필요 시 자동 청소 스크립트로 desktop.ini를 전면 제거한다.
-   Get-ChildItem ".git" -Recurse -Force -Include "desktop.ini" | Remove-Item -Force
-
-### 결론
-- desktop.ini는 Git 저장소에 불필요하고 위험한 파일이므로, **생성 차단** 또는 **주기적 청소**가 필수이다.
-## ⚠️ 위험 작업 사전 백업 의무
-
-- 삭제/이동/정리/전멸(git objects/refs 등)과 같이 되돌리기 어려운 작업 수행 전, 반드시 워킹 디렉토리 전체 백업을 확보한다.
-- 백업은 .git 폴더 제외 원칙으로 수행한다.
-- 백업 확보 사실을 확인한 뒤에만 위험 작업을 진행한다.
-- 사고 발생 시 백업본에서 즉시 복원한다.
-
----
-
-## ⚠️ Windows + Cloud Drive 환경 특수 리스크 관리 (desktop.ini)
-
-- Windows Explorer 및 GoogleDrive/OneDrive 동기화 과정에서 .git/objects/*, .git/refs/* 내부에 desktop.ini가 자동 생성될 수 있음.
-- Git은 이를 유효한 객체/참조로 오인하여 atal: bad object refs/desktop.ini 오류를 발생시킬 수 있음.
-- 예방 조치:
-  1. .git 폴더는 클라우드 동기화 제외 대상에 등록한다.
-  2. .git 폴더 및 하위 디렉토리를 숨김 처리한다. (ttrib +h +s .git /s /d)
-  3. 정기적으로 git fsck --full 무결성 검사를 수행한다.
-  4. 필요 시 자동 청소 스크립트로 desktop.ini를 제거한다.
+- 캐시 파일명은 반드시 {ticker}_{start}_{end}.csv 규칙을 따른다.
+- None_None 과 같은 불완전 파일은 자동 삭제 및 재생성 루틴으로 정비한다.
