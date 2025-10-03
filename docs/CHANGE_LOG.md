@@ -81,3 +81,9 @@
 - 프로젝트 초기화 (IPD.md, CHANGE_LOG.md, README.md 작성)
 - GitHub 최초 push
 - 3단 문서 체계(IPD + Change Log + Design Notes) 초안 확립
+
+⚠️ 문서 관리 규율 안내 (Discipline Notice)
+- 본 문서는 Endeavour 프로젝트 문서 관리 규율에 따라 유지됩니다.
+- 세션이 바뀌더라도, IPD/CHANGE_LOG/Protocol/청사진/Contract/Template 간 일관성을 반드시 준수해야 합니다.
+- 중복 내용은 제거하고, 역할별 구분(헌법·청사진·운영·이력·핸드오프)을 지키십시오.
+- 필요 시 Migration_pack.md에 사건/변경 사항 기록 후, ChangeLog에 반영하십시오.
