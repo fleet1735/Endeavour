@@ -1,0 +1,33 @@
+{
+  "metadata": {
+    "id": "SMA_Cross_v1",
+    "description": "10-20 SMA crossover"
+  },
+  "indicators": [
+    {
+      "name": "SMA_Short",
+      "type": "SMA",
+      "params": [
+        10
+      ]
+    },
+    {
+      "name": "SMA_Long",
+      "type": "SMA",
+      "params": [
+        20
+      ]
+    }
+  ],
+  "entry_rules": {
+    "operator": "crosses_above",
+    "left": "SMA_Short",
+    "right": "SMA_Long"
+  },
+  "exit_rules": {
+    "operator": "crosses_below",
+    "left": "SMA_Short",
+    "right": "SMA_Long"
+  },
+  "position_size": 1.0
+}

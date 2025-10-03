@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+exec pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File ".githooks/pre-commit.ps1"
+

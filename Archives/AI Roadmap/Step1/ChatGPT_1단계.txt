@@ -1,0 +1,872 @@
+Iteration 1 Data Handler Design – Research Findings
+1. Module Execution Structure (python -m)
+
+Typical Project Patterns: Python projects often structure code as a package to enable running modules with the -m flag. For example, the RealPython “snakesay” tutorial project has a src layout with an __init__.py and an __main__.py in the package directory
+realpython.com
+realpython.com
+. The __main__.py serves as the entry point (with an if __name__=="__main__": block calling a main() function) so that running python -m snakesay executes the package
+realpython.com
+realpython.com
+. In this pattern, the project can be run either via an installed console script defined in pyproject or by the module name with -m. The pyproject can declare a CLI script name pointing to package.__main__:main
+realpython.com
+, but using python -m package directly invokes __main__.py without needing installation.
+
+Open Source Examples: Many open-source tools follow this approach:
+
+Project A: Uses a top-level script (e.g. main.py) that imports from a src/ package. This is straightforward but requires running python main.py. If instead structured as a package (e.g. src/utils/data_handler.py inside a package), one can use python -m src.utils.data_handler to execute it. In such cases, ensure src/__init__.py and src/utils/__init__.py exist so that Python knows these are packages.
+
+Project B: Uses an __main__.py in a package. For instance, an open-source project might have a structure:
+
+myproject/
+  src/
+    mymodule/
+      __init__.py
+      __main__.py
+      data_handler.py
+
+
+If data_handler is meant to be run directly, it could either be a script with if __name__ == "__main__": at bottom, or be invoked via an __main__.py. One repository following a similar approach is the “snakesay” example, which shows the __main__.py calling into the module’s code
+realpython.com
+. Another example is the PyPA sample project structure which recommends a package rather than a bunch of loose scripts
+realpython.com
+.
+
+__init__.py vs __main__.py: If your module is a single file (e.g. data_handler.py), you do not strictly need an __main__.py – you can run it with python -m src.utils.data_handler as long as the directories are packages. In that case, include a guard in data_handler.py:
+
+def main():
+    ...  # implement main functionality
+
+if __name__ == "__main__":
+    main()
+
+
+When executed with -m, Python will set __name__="__main__" for that module and trigger the code inside the guard. If instead data_handler is a directory (package), then you must have __main__.py inside it for python -m src.utils.data_handler to work
+realpython.com
+.
+
+Folder Structure Comparison: Among repositories surveyed, one uses a flat structure with scripts and adjusts sys.path in each script – this is not recommended. Another uses a proper package layout and avoids any manual path manipulation. Below is a comparative snippet:
+
+Repo X:
+
+Endeavour/
+  src/
+    utils/
+      __init__.py
+      data_handler.py  # contains if __name__=="__main__"
+  ...
+
+
+Uses python -m src.utils.data_handler to run. No sys.path hacks needed if executed from project root.
+
+Repo Y:
+
+Project/
+  mymodule/
+    __init__.py
+    __main__.py  # calls main()
+    data_handler.py
+
+
+Uses python -m mymodule (which runs main.py, internally calling data_handler logic). Alternatively, might provide a console_script entry in pyproject or setup.cfg.
+
+Pyproject vs Setup.cfg: Both approaches can work. Using a pyproject.toml to define entry points (via [project.scripts]) is modern and convenient; e.g. the RealPython example defines ssay = "snakesay.__main__:main" to install a command
+realpython.com
+. This isn’t strictly necessary for our use-case but is a nice-to-have for future CLI support. Whether you use pyproject.toml or setup.cfg to define console scripts, the underlying code structure remains the same (with a main callable in an accessible module). For now, focusing on python -m execution ensures we don’t depend on installation.
+
+Windows & VS Code Path Issues: A common pitfall is assuming the working directory or import path. For instance, one StackOverflow example showed a user manually changing os.chdir in every script to find data files, which is not ideal
+stackoverflow.com
+stackoverflow.com
+. To avoid such issues:
+
+Always run from the project root (VS Code can be configured to use the workspace root as cwd for debugging). The WorkOrder explicitly says the execution principle is to run from project root.
+
+Use absolute or package-relative imports. E.g., in data_handler.py, do from src.utils import some_module (which works when src is a package on the path). Do not use relative imports that break when run as a module.
+
+For file paths (like reading the CSV input), derive the path based on a known location instead of relying on cwd. For example:
+
+from pathlib import Path
+DATA_DIR = Path(__file__).resolve().parents[2] / "02_docs" / "universe"
+csv_path = DATA_DIR / "target_tickers.csv"
+
+
+This finds the CSV relative to the project structure regardless of how the script is launched. This technique, using Path(__file__), was suggested as a solution to avoid manual chdir
+stackoverflow.com
+.
+
+Recommendation & Template: For our project, we should treat src/ as a package and ensure src/__init__.py and src/utils/__init__.py exist (they can be empty). Implement src/utils/data_handler.py with a main() function encapsulating the execution, and end with the standard if __name__ == "__main__": main(). This will allow both python -m src.utils.data_handler and potential future reuse (importing and calling main() from tests or other modules). We do not need a separate main.py file since we have a single module, but we must document that execution is from project root to avoid import issues. This design is clean and avoids any sys.path manipulation, satisfying the requirement.
+
+Tip: In VS Code launch configuration, use "module": "src.utils.data_handler" to run the module, which respects package imports, rather than pointing directly at a file. This mimics the command-line python -m behavior.
+
+Pros & Cons Comparison:
+
+Structure	Pros	Cons/Notes
+Single module (with if __main__)	Simple; module can be run with -m and imported for testing; no extra files.	Must ensure the parent packages (src, utils) have __init__.py. Running outside project root will fail (but we enforce root execution).
+Package with __main__.py	Allows python -m package to run even if package has multiple modules; can separate CLI parsing in __main__.py.	Slightly more complex; need to maintain an extra file. Not necessary if one module suffices.
+Entry point via pyproject (console_script)	Easy user experience (endeavour-data-handler command); no need for user to type python.	Requires installation step; during development one must reinstall or use pip install -e. Not needed for internal iteration.
+
+Our recommendation is to use the single module approach in src/utils/data_handler.py with proper package init files – this aligns with the WorkOrder and keeps things straightforward. We can add a stub in a future pyproject.toml for console script if desired, but it’s optional.
+
+Risk & Mitigation: The main risk is import or path errors (e.g. ModuleNotFoundError if run incorrectly). We mitigate this by documenting that execution must be from project root and by using absolute imports (no relative .. imports). Another risk is that VS Code’s default “Run Python File” might set cwd to the file’s directory; to avoid confusion, always use the module runner or configure the IDE. We will also include a quick test: running python -m src.utils.data_handler on Windows (PowerShell) and Linux to ensure it behaves the same. Because we avoid any OS-specific path logic and rely on pathlib, this should be cross-platform. Using forward slashes in code isn’t an issue if we use Path, but if we ever manually concatenate paths, we must use os.path.join or Path to be safe on Windows.
+
+2. YFinance-Based Data Handler Design Examples
+
+We researched several examples of data handlers built on yfinance to gather best practices for fetching 5-year daily stock data with caching:
+
+(a) Caching and Incremental Updates: A notable example is the open-source project “intraday” by marcusschiesser (MIT License) which caches Yahoo Finance data to CSV. It provides an update_ticker(symbol) function that reads existing cached data, fetches the latest chunk from yfinance, and appends it, then saves back to CSV. In their case of intraday data, Yahoo only provides 7 days per call, so each update fetches the newest 7-day block and concatenates
+github.com
+. The key point is they never re-download the entire history if a cache exists; they only retrieve what’s missing since the last date in cache. Their README explicitly says: “This method gets the data from the cache (if it exists), appends 7 days of data from yfinance and updates the cache.”
+github.com
+. They also have a get_ticker(symbol) to load data from cache (converting timezone if needed) without any fetching
+github.com
+.
+
+For our daily data scenario (5 years of daily bars), a similar strategy can be used: if a cache file for a ticker exists, read it and determine the last date present. If it’s up to yesterday, we have a cache hit and can use the data as-is (logging a cache hit). If it’s stale (missing recent days) or if we have a force refresh option, we can fetch only the needed dates from yfinance. Since the iteration requirement doesn’t explicitly mention partial updates, a simpler approach initially could be: check if file exists – if yes and user didn’t force refresh, use it (hit); otherwise (file missing or refresh needed) fetch full 5-year data and save (miss). This meets the requirements, though in future iterations we might implement incremental updates to avoid re-downloading data unnecessarily.
+
+(b) Retry Logic with Backoff: Hitting Yahoo API rate limits or transient network failures is a concern. Best practice is to implement exponential backoff for retries
+smythos.com
+. For example, a Medium article suggests waiting 1 second, then 2, then 4, etc., for subsequent retries to avoid being blocked
+smythos.com
+. We didn’t find an off-the-shelf open source data handler with backoff built-in, but this approach is common for API clients. We can use the backoff library or simple time.sleep in a loop to retry a few times on failure (e.g., HTTP 429 or network error).
+
+Additionally, batching requests is recommended to minimize calls
+smythos.com
+. Yfinance supports batching: yf.download() can take a list of tickers and will fetch them in parallel (yfinance uses threading internally)
+pybroker.com
+smythos.com
+. In our context, we could potentially call yf.download once for all target tickers for efficiency. However, since we plan to handle each ticker separately (to cache individual CSVs), we might loop with a small delay or use yfinance’s threads=True to parallelize internally. Yfinance’s default threads=True in download will spawn threads for multiple tickers (as seen by the progress bar when fetching multiple symbols
+pybroker.com
+). An alternative is using Python’s ThreadPoolExecutor as demonstrated on StackOverflow: mapping a list of tickers to a function that fetches each via yfinance
+stackoverflow.com
+. That example printed price info concurrently and significantly sped up retrieval
+stackoverflow.com
+. We should be cautious with too many threads (Yahoo might still throttle if many requests fire at once). A balanced approach is to batch tickers in groups or rely on yfinance’s internal threading which likely limits the concurrency.
+
+(c) Ticker Format Normalization: When using yfinance for different markets, tickers often need suffixes (e.g., .KS for KOSPI, .KQ for KOSDAQ as given in our input file). We saw that our universe CSV already provides Yahoo-formatted tickers (e.g. 005930.KS for Samsung Electronics). If we encountered tickers without suffix, a normalization step would be required (e.g., if an input was 005930 and a separate column indicated market, we’d append .KS). Some open-source code or discussions highlight this; for example, Yahoo uses different suffixes for different exchanges. In our case, since input is pre-normalized, our handler should still be mindful: we might want to strip any whitespace or ensure case correctness (tickers are usually case-insensitive but best to use the exact format). Also, if using yfinance Ticker class vs download, we should ensure to supply the full ticker string.
+
+One edge case in normalization: Stocks that changed markets (e.g., a company moving from KOSDAQ to KOSPI). Yahoo might treat those as separate tickers (e.g., Kakao might have a KQ ticker for pre-listing data and KS for post). If our list has one ticker symbol (say Kakao as 035720.KQ), yfinance might return NaNs for dates after it moved. This is exactly a scenario that can cause continuous NaNs (the data “ends” when the ticker was on KOSDAQ) – we address missing data handling in section 3. Our design could handle this by detecting such a gap and perhaps switching suffix (or relying on pykrx fallback).
+
+(d) Holiday and Missing Day Handling: Yahoo’s history() or download() will return a DataFrame indexed by date for trading days only. Weekends and exchange holidays are simply absent (not as NaNs, just no row). This is normally fine. We don’t need to fill non-trading days with NaNs – it’s actually preferable not to. However, if we later want to detect if data is missing a trading day (due to an API glitch), we might need an exchange calendar. The yfinance-cache project addresses this by using the exchange_calendars library to know when markets are open
+pypi.org
+. They ensure updates only happen if the market has actually been open long enough since last fetch. For our simpler implementation, we can assume Yahoo data is correct in skipping holidays, and just be aware that an absence of a date is likely a holiday. We will incorporate logic to differentiate that when issuing missing data warnings (see section 3).
+
+(e) Separation of Concerns & Testability: It’s important to isolate the data-fetching logic from file I/O and from global state so we can unit test easily. The patterns observed:
+
+The intraday example’s update_ticker function internally reads and writes CSV, which is convenient but makes it harder to test without actual files. To improve on that, we could have a lower-level function fetch_data_from_yahoo(ticker, start, end) that returns a DataFrame (pure function with no side-effects), and another function to handle the caching (check file, read CSV to DataFrame, call fetch if needed, then write CSV). This way, we can test fetch_data_from_yahoo with a known ticker (perhaps using a shorter range) by mocking yfinance if needed, and test the caching logic separately by simulating files.
+
+Use of classes vs functions: Some designs encapsulate the handler as a class (perhaps to hold config like cache directory, source type, etc.). For now, a simple functional approach is fine (e.g., a main() that orchestrates reading the ticker list and then for each ticker calls helper functions). For testability, ensure those helper functions (like load_cache(ticker), save_cache(ticker, df), download_ticker_data(ticker)) are deterministic and do minimal work each.
+
+Open-Source Case Studies Summary:
+
+yfinance-cache (MIT License) – a library that wraps yfinance’s Ticker and adds smart caching. It emphasizes only fetching new or updated data: “only update cache where missing/outdated and new data expected. Idea is to minimize fetch frequency”
+pypi.org
+. It even adjusts cached data for splits/dividends and can verify cache integrity
+pypi.org
+pypi.org
+. While we might not implement all those features now, this validates the approach of partial updates and maintaining data quality. It also introduces a TTL (max_age) concept for cache freshness
+pypi.org
+ – e.g., if data older than X, fetch again. We can incorporate a simple version (say an optional parameter --refresh or a setting to always refresh if last date < today).
+
+PyBroker’s YFinance DataSource – this framework uses a YFinance class under the hood which ultimately calls yf.download. By default it prints a progress bar and caches if enabled
+pybroker.com
+pybroker.com
+. PyBroker uses diskcache for caching and keys by ticker+date range
+pybroker.com
+. Notably, PyBroker’s caching is at a higher abstraction (the user calls enable_data_source_cache('yfinance') once
+pybroker.com
+ and then all data requests are cached). It then logs “Loaded cached bar data.” on subsequent queries
+pybroker.com
+. This indicates their cache is working as intended. For our handler, implementing a custom caching is feasible with pandas to_csv and read_csv. Diskcache or joblib caches are alternatives, but a CSV per ticker is straightforward and human-inspectable. PyBroker’s design suggests each unique (ticker, start, end) combination is a cache entry
+pybroker.com
+ – exactly what our file naming scheme is (ticker_start_end.csv).
+
+Error Handling & Logging: None of the examples explicitly showed logging design, but we infer best practices. We’ll want to log info when using cache vs downloading (PyBroker prints a message when loading from cache
+pybroker.com
+). We should also catch exceptions from yfinance (e.g. network issues) and retry or fail gracefully with an error message. The Medium article and SmythOS blog recommended robust error handling and not assuming success every time
+smythos.com
+. So our design will include try/except around the download calls, logging [ERROR] if a ticker fails after retries, so the user knows.
+
+Proposed Template for Our Project:
+
+# src/utils/data_handler.py
+
+import yfinance as yf
+from pathlib import Path
+import pandas as pd
+from datetime import datetime, timedelta
+
+CACHE_DIR = Path("04_data/cache")  # base cache directory
+
+def fetch_from_yahoo(ticker, start, end):
+    # possibly use yf.download for speed if many tickers at once, but single ticker here
+    data = yf.download(ticker, start=start, end=end, progress=False, actions=False)
+    # Ensure columns are standardized
+    data = data.rename(columns=str.title)  # YF returns 'Open', 'High', etc already titled
+    return data
+
+def load_cache(ticker, start, end):
+    file = CACHE_DIR / f"{ticker}_{start}_{end}.csv"
+    if file.exists():
+        df = pd.read_csv(file)
+        # basic schema check
+        expected_cols = ["Date","Open","High","Low","Close","Volume"]
+        if list(df.columns) == expected_cols:
+            return df
+    return None
+
+def save_cache(ticker, start, end, df):
+    file = CACHE_DIR / f"{ticker}_{start}_{end}.csv"
+    # ensure directory exists
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    df.to_csv(file, index=False)
+    return file
+
+def main(source="yfinance", force_refresh=False):
+    # 1. Read ticker list
+    tickers_df = pd.read_csv("02_docs/universe/target_tickers.csv")
+    tickers = tickers_df['Ticker'].tolist()
+    end_date = datetime.today().strftime("%Y-%m-%d")
+    start_date = (datetime.today() - timedelta(days=5*365)).strftime("%Y-%m-%d")
+    for ticker in tickers:
+        cache = None if force_refresh else load_cache(ticker, start_date, end_date)
+        if cache is not None:
+            print(f"[INFO] Cache hit: {ticker} ({start_date} ~ {end_date})")
+            df = cache
+        else:
+            print(f"[INFO] Fetching: {ticker} from {source}...")
+            if source == "yfinance":
+                # implement retries with backoff
+                attempt = 0
+                wait = 1
+                while True:
+                    try:
+                        df = fetch_from_yahoo(ticker, start_date, end_date)
+                        break
+                    except Exception as e:
+                        attempt += 1
+                        if attempt >= 3:
+                            print(f"[ERROR] Failed to download {ticker} after 3 attempts: {e}")
+                            df = pd.DataFrame()  # empty
+                            break
+                        print(f"[WARN] Download error for {ticker}, retrying in {wait}s...")
+                        time.sleep(wait)
+                        wait *= 2
+            elif source == "pykrx":
+                df = fetch_from_krx(ticker, start_date, end_date)  # assuming similar function for pykrx
+            else:
+                raise ValueError("Unknown source")
+            if not df.empty:
+                save_cache(ticker, start_date, end_date, df)
+                print(f"[INFO] Downloaded: {ticker} → saved to cache")
+        # After obtaining df (either from cache or fresh download):
+        # 2. Validate data
+        if df.isnull().values.any():
+            # detect continuous NaNs if needed
+            print(f"[WARN] Missing values detected in {ticker}")
+    # end for
+    print("Done.")
+
+
+Note: Above is pseudo-code for illustration. The real implementation would handle details like date formatting for pykrx, and we would move some logic (like backoff) into a helper to keep main cleaner. Also, in practice we might vectorize yfinance calls for all tickers to leverage batching.
+
+This template demonstrates separation: fetching (which can be tested with a known ticker and monkeypatched yfinance), caching (which can be tested by simulating a small DataFrame and ensuring it saves/loads correctly), and the main loop orchestrating it.
+
+Speed Optimizations: We mentioned batching: Another design could collect all tickers that need downloading and call yf.download(tickers_list, start, end, group_by='ticker'). This returns a Panel-like DataFrame with an inner level of ticker. We would then split and save each ticker’s data. This is efficient (Yahoo API allows multiple symbols in one request). The downside is if one ticker fails or is invalid, it could affect the whole call (yfinance might just log an error internally and continue though). A compromise: if 40 tickers, do 10 at a time in 4 batches. Given our scope (~40 tickers by Iteration 5), yfinance can likely handle that in one go. We might consider this after confirming single-ticker approach performance.
+
+Threading vs Sequential: If not batching, we could thread. The ThreadPool example from SO yielded significant speedup for 10+ tickers
+stackoverflow.com
+. Python threads can be used since yfinance (and underlying requests) will spend time waiting on network, so I/O bound threading is beneficial. However, implementing our own threading means managing results and exceptions. Because yfinance already multithreads when given a list, using that might be simpler.
+
+Function Responsibility Separation: As per requirement, we highlight that the functions are split by responsibility: e.g., fetch_from_yahoo purely gets data, load_cache/save_cache handle I/O, main orchestrates logic and prints logs. This makes it easier to write unit tests for, say, fetch_from_yahoo (with perhaps a real call or a stub for a known small ticker like "^GSPC" for a few days), and for load_cache/save_cache by creating a dummy DataFrame. Logging can be captured by tests if needed to verify that cache hits and misses produce the correct output.
+
+Comparison of Approaches:
+
+Intraday approach: incremental append, but geared to intraday limitations. Pros: minimal re-download, continuous accumulation. Cons: complexity in slicing exactly new data, and potential for data overlap if intervals not handled carefully. For daily data of fixed 5-year window, we might not need incremental until we run this repeatedly over time (e.g., next week, to update the window). If we want always “last 5 years up to today”, the window shifts, so the cache file from last week would be slightly short on the latest dates. We could still reuse most of it and just fetch the last few days. This is an optimization to consider (perhaps in a future iteration).
+
+Always fresh download: simpler but redundant network calls if run often. Pros: simple logic. Cons: slower and more load on Yahoo; could hit rate limits if scaling.
+
+Our recommendation is a hybrid: check cache and use it if it covers the needed date range, otherwise fetch missing portion. Given iteration 1 DoD includes running multiple times to see cache hits, we should implement at least basic cache reuse.
+
+Risks & Mitigation: Yfinance has known quirks. For example, sometimes it returns an extra last row of all NaNs (if end date >= today’s date)
+github.com
+. Mitigation: we can drop any rows where all OHLCV are NaN. Also, if a ticker is not found by Yahoo (yfinance might return empty or raise), we catch that and perhaps try a different approach (e.g., for Korean tickers, fall back to KRX). Rate limiting risk: mitigated by backoff and by batching to reduce number of calls. Data discrepancies (Yahoo occasionally has missing days or bad data): we will flag NaNs and later handle via pykrx if available.
+
+We also note that Yahoo data may not adjust for certain corporate actions by default. Yfinance by default gives split-adjusted prices (and it provides an Adj Close for dividend adjustments). Our schema doesn’t include Adj Close, so likely we use raw Close (split-adjusted, not dividend-adjusted). Pykrx by default gives dividend-unadjusted prices (except it adjusts for splits by default as “modified prices”)
+pypi.org
+. This means if we ever compare data from both sources, slight differences might appear after dividends. It’s beyond iteration 1 scope, but a possible risk if mixing data sources. Since our focus is on consistency within each source, it’s acceptable.
+
+3. Cache Validity Checks & Missing Data Warnings
+
+To ensure data integrity and freshness, our data handler will implement cache validation and missing value detection. Key aspects and how they are handled:
+
+Cache Hit/Miss Determination: When processing each ticker, the handler will log whether it used cached data or fetched new data. For example:
+
+[INFO] Cache hit: 005930.KS (2019-09-26 ~ 2024-09-26) if the file already exists and covers the full date range.
+
+[INFO] Downloaded: 000660.KS → saved to cache after fetching data and writing to cache for a miss.
+
+The logic to decide hit vs miss could be:
+
+If cache file exists, load it and verify its date range. If the earliest date and latest date match the intended start and end (or at least the latest date is recent enough), consider it a hit. If the file is missing or does not include the latest days needed, it’s a miss and we fetch.
+
+A Time-to-Live (TTL) approach can also be used: e.g., define that any cache older than 1 day is stale (since new trading data might be available). In iteration 1, we are always getting a 5-year window up to today, so effectively each run is for a moving window. TTL could be less relevant because each day you'd get a slightly different start date (window shifts by one). But we could incorporate an option like --force-refresh to ignore cache. Or a TTL of say 1 day such that if file mod time is older than today, refresh (ensuring we catch the new data each day). In the yfinance-cache library, they implement max_age for cached data and even consider market hours to decide refresh
+pypi.org
+pypi.org
+, which is sophisticated. Our simpler take: if today’s date is not covered in cache and today is a trading day after last cached date, then refresh needed.
+
+Column Schema Verification: The cached CSV should have the columns Date, Open, High, Low, Close, Volume in order. We will verify after loading:
+
+Check that these column names exist and no extras. If a cache file is malformed or from an older schema version, we might prefer to ignore it and re-download. This acts as a safety check.
+
+For example, if we later decide to add an Adj Close column or switch to Parquet, this check will catch mismatches. In iteration 1, since we control schema, it's mainly to guard against any write/read issues.
+
+Missing Data Warning Logic: We will detect missing data and log warnings. “Missing” can manifest in a few ways:
+
+NaNs within the DataFrame: Yfinance might return NaN for certain days or fields. For instance, some users have reported that if a ticker didn’t exist in the early part of the range (like an ETF that started later), yfinance’s multi-ticker download yields NaNs for that ticker for dates before inception
+stackoverflow.com
+stackoverflow.com
+. Also, if Yahoo fails to provide a price on a trading day (data glitch), it could appear as NaN.
+
+Gaps in Dates (trading days missing entirely): If the DataFrame’s index (dates) has a gap that is not a weekend/holiday, that means data is missing. For example, if we expect data through Friday but Thursday is absent, likely Yahoo didn’t provide it (could happen if API was called midday before data was final, etc.).
+
+Continuous NaN segments: If a stock was suspended or delisted, we might see a run of NaNs or 0 volume days. Or as discussed, if the ticker changed markets (Kakao example), post-change data might be NaN for the old ticker.
+
+Our plan:
+
+After obtaining the DataFrame (either from cache or new fetch), check df.isna().any() for each column or overall df.isnull().values.any(). If true, log a warning: e.g., [WARN] Missing values detected in 035720.KQ. This matches the expected output format.
+
+To refine the warning, we can attempt to distinguish expected vs unexpected NaNs:
+
+If NaNs are only at the very start of the series, it might indicate the stock IPO date is later than our start. That’s arguably expected. If NaNs are sporadic in the middle, that’s more concerning.
+
+One method (used in data cleaning) is to identify consecutive NaNs. For instance, using pandas we can find runs of NaNs by converting bool isna to int and grouping
+stackoverflow.com
+stackoverflow.com
+. If any run of NaNs >= 2 (or some threshold), we flag it specially. We might output the length of the longest NaN gap in the log for clarity.
+
+Another approach: cross-check with exchange holidays. True holidays yield no row but not NaNs in existing rows. So holidays don’t appear as NaNs at all. They appear as gaps in the index. We can generate a list of business days between start and end, exclude weekends and known holidays (perhaps using pandas_market_calendars or a simple list of KRX holidays if available), then see if any of those dates are missing from the DataFrame index. If any missing trading day is found, that’s an absent row. Yahoo usually doesn’t output an index entry at all for those, so they wouldn’t be NaN in DataFrame – they’d be entirely missing. To detect this, one can compare the number of trading days expected vs number of rows. However, for simplicity, we might not implement full holiday logic now. Instead, we rely on direct NaN check as a proxy.
+
+For example, if Yahoo had a partial outage on a date, it might still list the date but with NaNs. Or if using multi-ticker download, you might get NaNs for one ticker on a date another ticker had (as in the ^GSPC vs others example).
+
+Given iteration scope, a practical approach: if any NaN exists in the OHLCV columns, issue a warning. This catches issues like:
+
+Ticker didn’t exist for some early part (you’ll see NaNs for early dates if using multi-ticker download; in single ticker download, yfinance typically starts from first available date, so that scenario might not produce NaNs, it would just start later).
+
+Data glitch: Yahoo returns a row of all NaNs at the end if the end date is beyond last trading day (common – solution is to drop last row if it's all NaN).
+
+Missing dividend adjustments (not likely showing as NaN, but rather as sudden drop in price; outside scope).
+
+Zero volume days: Note that pykrx shows non-trading days as volume=0 and price repeated, but Yahoo would either omit or show NaNs. If our data source is Yahoo, any row present should have volume (even if zero) and prices. So NaNs truly indicate missing info.
+
+Continuous NaN segments: If needed, we can implement detection of a sequence of NaNs > 1. For example:
+
+nan_blocks = df['Close'].isna().astype(int).groupby(df['Close'].notna().astype(int).cumsum()).sum()
+max_nan_block = nan_blocks.max()
+
+
+This gives the size of largest consecutive NaNs block
+stackoverflow.com
+. If max_nan_block >= 5 (say a week of NaNs), we might highlight that specifically as “continuous 5-day missing data” in logs. A scenario for this could be a trading halt or delisting. However, since we plan a secondary source (pykrx) to fill data, we might handle it there.
+
+Holiday vs Missing: We will clarify in documentation that weekends/holidays are expected and not counted as “missing”. Our warning is generic; if a user sees a warning, they should investigate. E.g., “Missing values detected in 035720.KQ” might prompt them to realize Kakao changed exchange (KQ to KS). In the future, we could suppress warnings for NaNs at the very start corresponding to pre-IPO period by checking first valid index against start date.
+
+Sample Log Messages: We will use the format given in WorkOrder:
+
+[INFO] Cache hit: TICKER (start ~ end)
+
+[INFO] Downloaded: TICKER → saved to cache
+
+[WARN] Missing values detected in TICKER
+
+Additionally, possibly [INFO] Cache miss: fetching TICKER or similar to complement cache hit logs (the example output didn't explicitly show "miss" text, just the action of downloading).
+
+If we implement retries: [WARN] Download error for TICKER, retrying... and [ERROR] Failed to download TICKER: <reason>.
+
+By logging these, the execution trace becomes transparent. For example, a run might output:
+
+[INFO] Cache hit: 005930.KS (2018-09-27 ~ 2023-09-27)
+[INFO] Cache hit: 000660.KS (2018-09-27 ~ 2023-09-27)
+[INFO] Fetching: 035720.KQ from yfinance...
+[INFO] Downloaded: 035720.KQ → saved to cache
+[WARN] Missing values detected in 035720.KQ
+
+
+(This implies Samsung and SK Hynix were cached, Kakao was fetched and had missing data warning.)
+
+We will also include in logging if the cache was present but outdated (e.g., “Cache stale, updating: TICKER”).
+
+Validity Checklist: We propose the following checklist of cache/data validations performed by the handler for each ticker:
+
+File existence & date range: Does a cache file exist for this ticker covering the desired start–end?
+
+Yes -> load it (log hit). No -> will fetch (miss).
+
+If exists but, say, the last date in file is not the actual end date (maybe file was up to a previous date), decide whether partial update or full refetch. (In iteration 1, likely full refetch for simplicity.)
+
+Schema check: After loading (or fetching), ensure DataFrame has columns {Date, Open, High, Low, Close, Volume}. If not, log error or warning (indicating possible file corruption or unexpected source change). Potential action: ignore cache and refetch if schema is wrong.
+
+Date sort order: Ensure data is sorted by date ascending (it should be by default from sources, but if not, sort it). PyKRX, for example, returns data with oldest date at top
+pypi.org
+.
+
+Duplicate date check: Ensure no duplicate dates. (Unlikely but if we ever appended overlapping data, duplicates could occur.)
+
+Missing values (NaNs): Check for any NaN in numeric columns. If found, identify how many and possibly their positions:
+
+If they occur at beginning or end and correspond to outside trading period, maybe less concerning. But we will warn regardless.
+
+Use pandas to find NaNs and optionally print stats in debug mode.
+
+Continuous NaNs segment: If implementing, find longest stretch of NaNs as described. If it's more than 1, include that info. e.g., “missing 3 consecutive trading days”.
+
+Zero or negative values sanity check: (Not explicitly asked, but part of validity) – Prices shouldn’t be 0 or negative; Volume can be zero on some days (especially if halted). If Close is 0, that likely indicates a suspended stock (like PyKRX uses 0 for delisted days
+pypi.org
+). For Yahoo, close 0 is unlikely. We might warn if Close is 0 as well, since that’s effectively missing in a sense.
+
+Length check: Ensure we got roughly 5 years of data. E.g., 5 years ~ 1250 trading days. If DataFrame has significantly fewer rows (say 200), maybe the ticker IPO’d late or something’s wrong. We could log a note if data length seems too short for 5 years, but that might be obvious if missing values are present (the warning covers it). For now, length check mostly for curiosity or debugging.
+
+By performing these checks, we can confidently trust the cache. If something fails, our strategy will be to treat it as a cache miss (e.g., if columns don't match or data is obviously incomplete, we refetch). This way the cache validity is ensured at runtime.
+
+Continuous NaN Example & Handling: Consider Kakao if 035720.KQ only yields data until it moved to KOSPI, then NaNs for afterward. Our handler would:
+
+Load cache or fetch: gets a DataFrame where after a certain date, all entries might be NaN (or the DataFrame might stop at that date, depending on how yfinance behaves for delisted tickers). If we got NaNs for days after move, that triggers the warning.
+
+As mitigation, we know Kakao’s new ticker is 035720.KS. We might not automatically handle that in iteration 1, but the user could run with pykrx source to get a complete history. Or in a future update, we maintain a mapping of ticker changes.
+
+Console Output vs Logs: We’ll likely print these messages to stdout. For more formal logging, we could use Python’s logging module with levels INFO/WARN. That would allow toggling verbosity. But simple prints with prefixes are acceptable for now (the example output uses brackets with levels). We just ensure to include them as specified.
+
+Checklist for Developer (DoD oriented):
+
+Did we implement cache checking and logging of hit/miss? Yes (should see messages on repeat run).
+
+Are we identifying NaNs and logging warnings? Yes (test by introducing a NaN artificially or using a known problematic ticker).
+
+Do we allow forcing refresh? Yes, via a flag or easily by deleting cache for testing. The WorkOrder asks for TTL or force option, so providing a parameter --refresh to main would satisfy that.
+
+Are we differentiating holiday vs missing? Partially. We won't explicitly list holidays, but by focusing on NaNs, we by default ignore proper holidays (no rows -> no NaNs). If needed, in the warning we could add something like "(excluding holidays)" to clarify. But since holidays produce no data rather than NaNs, our method naturally ignores them. If we wanted to be extra clear, we could cross-check if any expected trading date is completely absent from data and treat that as an implied missing value. This could be an enhancement – e.g., using an exchange calendar to find that maybe one day that wasn’t a holiday is missing. Given time, implementing exchange calendar (e.g., use pandas_market_calendars for KRX) is possible. However, since we plan to rely on pykrx for data fidelity, we might handle holiday distinction in the integration of sources (section 4) instead (pykrx can confirm if a day was a holiday or not by whether it returns data).
+
+Provide sample output illustrating these checks.
+
+Conclusion for section: Our design includes robust cache validation and will warn the user of any irregularities in data. This proactive approach ensures that if Yahoo data is incomplete or stale, it’s not silently passed along. Instead, the user (or the system) can then decide to switch source or take action.
+
+We also recommend maintaining a log file if this runs as part of a pipeline, where all INFO/WARN messages are saved for audit. For now, console output suffices.
+
+4. PyKRX Supplement as Secondary Data Source (Adapter Pattern & Integration)
+
+To enhance data reliability for Korean stocks, we plan a dual-source architecture where yfinance is the primary source and pykrx (Korea Exchange API via PyKRX library) is the secondary (fallback) source. The goal is to seamlessly switch or combine sources without changing the calling code, and to account for market-specific nuances like ticker symbols, timezones, and adjusted prices.
+
+Design Pattern – Adapter / Interface: We introduce an abstraction, e.g., a DataSource interface (could be an abstract base class or just a convention) with a method like fetch(ticker, start_date, end_date) -> DataFrame. We then implement two adapters:
+
+YFinanceSource (for Yahoo Finance)
+
+KrxSource (for PyKRX)
+
+This is similar to how PyBroker structures multiple data sources: “A DataSource is a class that can fetch data from external sources”
+pybroker.com
+, and they have a YFinance class and could have others. By coding to an interface, our data handler can call data = source.fetch(ticker, start, end) without worrying about implementation details.
+
+We might also implement a combined source that tries one and then the other. Options:
+
+Primary with Fallback: Have one class DualSource that wraps two underlying sources. Its fetch will first call YFinanceSource.fetch; then examine the data for issues (e.g., missing values or incomplete range). If issues found, it invokes KrxSource.fetch (either for the missing portion or for the entire range) and merges the results. For instance:
+
+class DualSource(DataSource):
+    def __init__(self, primary, secondary):
+        self.primary = primary
+        self.secondary = secondary
+    def fetch(self, ticker, start, end):
+        df = self.primary.fetch(ticker, start, end)
+        if df_is_valid(df):
+            return df
+        else:
+            df2 = self.secondary.fetch(ticker, start, end)
+            return merge(df, df2)
+
+
+Here df_is_valid would check for NaNs or gaps. Merging logic might be as simple as: use primary data, and fill any NaN entries with secondary’s values for those dates. Or if primary returned empty/very incomplete, just use secondary entirely. In merging, caution: both data sources should align on dates. PyKRX returns a DataFrame indexed by date with columns in Korean. We’d rename those to English and set the index or Date column to match Yahoo’s format (likely both can use YYYY-MM-DD). Then we can combine on date.
+
+A fallback example scenario: 035720.KQ (Kakao) – YFinance might return data only until a certain date and then NaNs. DualSource would detect NaNs and call PyKRX. PyKRX would return the full 5-year data (with the ticker’s numeric code). We merge – likely we prefer the PyKRX data for the dates YF missed. If YF had some data and then stopped, we could take all YF data (pre-move) and append PyKRX data for after that date. But careful: PyKRX will also include the pre-move data (since the code is same, KRX data covers entire period). Potentially better to just take PyKRX for entire range and maybe discard YF’s partial to avoid any subtle inconsistency. However, sometimes Yahoo might have something PyKRX doesn’t (perhaps intraday or more up-to-date info intraday, not in daily context though). For daily, PyKRX is authoritative for local market, so defaulting to PyKRX when in doubt is reasonable.
+
+Source Selection Parameter: The WorkOrder says the module should support source="yfinance" (default) or "pykrx" option. This implies the user can choose to use only pykrx. In our code, we can route to either YFinanceSource or KrxSource based on a parameter (as shown in the main() pseudo-code above). In the UI, this might be a CLI argument or config. So if someone explicitly sets source to pykrx, we should fetch all data via pykrx only (no Yahoo at all). This is straightforward with the adapter design: e.g., source = KrxSource() and then loop.
+
+Combining Data (Enrichment): Another approach is to always fetch from Yahoo and PyKRX and then combine. But that doubles API calls and isn’t efficient unless needed. Better is the on-demand fallback approach described.
+
+PyKRX Specific Adjustments: PyKRX library specifics that we must handle:
+
+Ticker symbols: PyKRX expects numeric ticker codes (as strings) without market suffix. For example, stock.get_market_ohlcv("20210101","20211231","005930") for Samsung
+pypi.org
+. Our input tickers have .KS or .KQ. We need to strip the suffix and possibly ensure zero-padding to 6 digits. Likely the part before the dot in 005930.KS is exactly what PyKRX expects. We also need to specify the market for tickers not on KOSPI (because PyKRX defaults to KOSPI if not specified). PyKRX functions like get_market_ohlcv have an optional market param or separate functions for KOSDAQ. Actually, from PyPI docs: "if not specified, KOSPI is default, but you can specify market='KOSDAQ' etc."
+pypi.org
+. We saw examples where to get KOSDAQ tickers one could pass market="KOSDAQ"
+pypi.org
+. So, our adapter for pykrx could parse the ticker string:
+
+If it ends with .KS or .KQ, use the numeric part and call get_market_ohlcv accordingly. E.g., '091990.KQ' -> code '091990', call get_market_ohlcv(start, end, "091990", market="KOSDAQ").
+
+Alternatively, PyKRX might determine market by looking at ticker: but likely not, since some codes overlap between markets? Actually, not sure if overlaps happen, but better to be explicit.
+
+If our universe file’s first column “구분” (Category) has values like "KOSPI" or "KOSDAQ" (the example shows that), we can use that to know the market of each ticker. That column is likely provided exactly for such needs. So our code can map ticker to its market (from the CSV row, '구분' field).
+
+Date format and Timezone: PyKRX expects dates as "YYYYMMDD" strings
+pypi.org
+. We can format accordingly. It returns a DataFrame indexed by date (as pandas Timestamps presumably with no tz, just date) and columns in Korean (시가, 고가, ...). We will rename those to English: {'시가':'Open', '고가':'High', '저가':'Low', '종가':'Close', '거래량':'Volume'}. PyKRX data is in local currency KRW for prices, which is same as Yahoo’s for Korean stocks (Yahoo also reports in KRW). Volume units should also align (both are number of shares).
+
+Adjusted prices: By default, PyKRX returns prices adjusted for corporate actions (splits, etc.) as of the end date (so it's similar to Yahoo’s historical data which is typically split-adjusted). They mention you can get unadjusted by adjusted=False
+pypi.org
+. We likely want the adjusted (default) so that e.g. Samsung’s pre-2018 prices are split-adjusted downward to match current scale. Yahoo data is also split-adjusted. Dividends: PyKRX by default does not adjust for dividends (just splits), which is the same as Yahoo’s Close (not Adj Close). So they are consistent.
+
+Market holidays and oddities: PyKRX will simply not return any row for non-trading days (just like Yahoo). However, one difference: PyKRX includes half-trading days or sudden holidays seamlessly. If Yahoo had any slight mismatch in recognizing a holiday, PyKRX can confirm the authoritative list. In practice, this is rarely an issue.
+
+Time zone differences: Yahoo’s daily data often comes timestamped at UTC or New York time for international markets. In the ^GSPC example, dates had time 00:00:00+00:00
+stackoverflow.com
+. For our purposes, we will treat the date as date (we’re not doing intraday). We might remove timezone info or align to local. PyKRX has no timezone – just date. So minor difference: Yahoo might label a day as, say, 2021-03-02 00:00:00+00:00 for a KRX trading day which in local would be 2021-03-02. We will likely drop time and use date only, which aligns them. If needed, we ensure to localize Yahoo data’s index to Asia/Seoul and then take just the date, but since we output CSV with a Date column, we can simply output date in YYYY-MM-DD.
+
+Symbol differences beyond suffix: Some Korean stocks have multiple classes (e.g., preferred shares with different codes). Yahoo might not list some of them. PyKRX covers all listed issues. If a ticker in the universe isn’t on Yahoo at all, our Yahoo fetch will fail or return empty, and then we rely entirely on PyKRX. For example, if the universe included a stock that only has a numeric code and not supported by Yahoo (maybe something like Korean preferred stock that Yahoo doesn’t list), we should detect Yahoo failure and automatically try PyKRX. With our DualSource logic, if df comes back empty or all NaN from YF, we flip to KRX.
+
+Fallback Flow Example:
+
+Try yfinance for ticker X.
+
+If success and df has no NaNs, use it.
+
+If df has NaNs or is empty:
+
+Log e.g. [INFO] Yahoo data incomplete for X, attempting pykrx....
+
+Fetch with PyKRX.
+
+If that succeeds, either replace or fill the NaNs. E.g., we could take the Yahoo DataFrame and update NaN entries with values from PyKRX for those dates
+pypi.org
+. Since PyKRX likely has all values (no NaNs expected for valid listed dates), this can fill the gaps.
+
+If Yahoo had some data and PyKRX also has that data (which it will), one slight complication: ensure no conflict. Ideally, they should match on the overlapping period. There might be tiny differences in adjusted prices (if Yahoo’s rounding vs KRX’s rounding differ by a won or two). For consistency, we might decide to trust one source entirely rather than mixing within the same date range. Simpler: if fallback triggers, perhaps just use PyKRX data for the whole range (drop Yahoo’s). This guarantees consistency but means any minor differences in earlier data will reflect PyKRX values. That is probably fine since PyKRX is likely more accurate for local stocks.
+
+Save the final DataFrame to cache (maybe also note source used in logs).
+
+If PyKRX also fails (unlikely unless ticker truly invalid or KRX site down), log an error. At least user knows data for that ticker is not retrieved.
+
+Common Interface Implementation:
+
+class YFinanceSource:
+    def fetch(self, ticker, start, end):
+        # similar to fetch_from_yahoo earlier
+        data = yf.download(ticker, start=start, end=end, progress=False, actions=False)
+        if not data.empty:
+            data = data.rename(columns={"Adj Close":"AdjClose"})  # if needed, or drop AdjClose
+        return data
+
+class KrxSource:
+    def fetch(self, ticker, start, end):
+        code, market = parse_ticker(ticker)  # e.g., "005930.KS" -> ("005930","KOSPI")
+        df = stock.get_market_ohlcv(start.replace("-",""), end.replace("-",""), code, market=market if market else None)
+        # Rename columns
+        df = df.reset_index()  # index is '날짜'
+        df.rename(columns={"날짜":"Date","시가":"Open","고가":"High","저가":"Low","종가":"Close","거래량":"Volume"}, inplace=True)
+        # Possibly drop '거래대금','등락률' if present since we only need OHLCV.
+        if '거래대금' in df.columns:
+            df.drop(columns=['거래대금','등락률'], inplace=True)
+        return df
+
+
+We will need a helper parse_ticker that uses either the suffix or the 구분 column from the CSV:
+
+def parse_ticker(ticker_str):
+    if ticker_str.endswith(".KS"):
+        return ticker_str.split(".")[0], "KOSPI"
+    elif ticker_str.endswith(".KQ"):
+        return ticker_str.split(".")[0], "KOSDAQ"
+    else:
+        # default to KOSPI if numeric? or handle foreign tickers differently
+        return ticker_str, None
+
+
+(This assumes tickers without suffix are either foreign or need special handling; we might never get those in our input, but it’s good to define behavior.)
+
+Combining Data Sources Test Strategy:
+
+Unit tests: We can simulate a scenario for one ticker:
+
+Monkeypatch YFinanceSource.fetch to return a DataFrame with NaNs for certain dates, monkeypatch KrxSource.fetch to return complete data for those dates. Then verify that DualSource.fetch returns a DataFrame with no NaNs and that it either matches the secondary source on those dates.
+
+Test parse_ticker on sample tickers.
+
+Test that KrxSource correctly renames columns and returns expected schema. (We might test with a small known range for a ticker by calling PyKRX for 2 days of Samsung, but that requires internet and the actual KRX site. Instead, we could save a small sample DataFrame mimicking PyKRX output and test the renaming logic.)
+
+Ensure YFinanceSource returns columns in the expected format (likely 'Open','High','Low','Close','Adj Close','Volume'. We might drop or ignore 'Adj Close' since we are not using it, to match our schema of 6 columns).
+
+Integration test:
+
+One could run the data_handler with source="yfinance" on a known ticker and compare output to running with source="pykrx". For example, run for 005930.KS for a small window and ensure both produce a CSV and maybe compare a few data points.
+
+Test the fallback by forcing a situation: e.g., modify YFinanceSource to artificially produce NaNs and see if pykrx fills them. Or run on Kakao around the market transfer date to see if our code picks up the NaNs and correctly uses pykrx.
+
+Accounting for PyKRX Exceptions: PyKRX is screen-scraping KRX or using their API, it can sometimes fail if the KRX site changes. For example, a user reported a bug where get_market_ohlcv("20000101","20001231","005930") only returned data from 2013 onwards
+github.com
+ – perhaps KRX’s site didn’t serve older data. Yahoo might have those older data from a different source. Since our range is last 5 years, not an issue now. But one risk: PyKRX might block too frequent calls (they mention adding time.sleep(1) in loops to avoid being blocked
+pypi.org
+). If we request dozens of tickers from KRX quickly, we should throttle a bit. Perhaps our design should insert a small delay (e.g., 0.2 seconds) between PyKRX calls, or respect their suggestion of 1 second if querying all stocks. With ~40 tickers, 1-second delay each is 40 seconds which might be acceptable. Or, PyKRX might not actually block small volumes. To be safe, we could implement a short sleep in KrxSource.fetch after each call or use the built-in example approach. Alternatively, if we foresee heavy use, we could integrate an exponential backoff for KRX too (if a call returns empty unexpectedly, wait and retry).
+
+Symbol Exceptions & Adjustments:
+
+If some tickers differ in Yahoo vs KRX (e.g., Yahoo might use different ticker for preferred shares), we must ensure our mapping covers that. Possibly out of scope if universe is mainly common stocks.
+
+Timezone: We ensure final data uses consistent date. If Yahoo data shows date with a timezone, converting to naive local date might be needed. But if we use yf.download, the index is typically timezone-aware. We can do data.reset_index() which yields a 'Date' column as pandas Timestamp; convert to date string for CSV. PyKRX Date from .reset_index() will be pandas Timestamp as well. They should align by date value.
+
+Flow Diagram (conceptual):
+
+for each ticker in list:
+    if cache exists and not force:
+        load data
+        source_used = "cache"
+    else:
+        if primary_source == "pykrx" (or user specified):
+            data = KrxSource.fetch(ticker)
+            source_used = "pykrx"
+        elif primary_source == "yfinance":
+            data = YFinanceSource.fetch(ticker)
+            source_used = "yfinance"
+            if data has missing values:
+                warn("Yahoo data missing for {ticker}, using pykrx for completeness")
+                data2 = KrxSource.fetch(ticker)
+                data = merge_func(data, data2)
+                source_used = "yfinance+pykrx"
+        save data to cache
+    validate data (schema, NaNs):
+        if missing values:
+            log WARN
+    proceed to next
+
+
+This pseudo-flow ensures we try not to hit pykrx unless needed (to reduce load on that source and rely on presumably faster Yahoo for majority of data). But if user explicitly chooses pykrx as base, we skip Yahoo entirely – useful if Yahoo is unreliable or for off-market hours where Yahoo might not have today’s close yet whereas KRX does after market close.
+
+Unit/Integration Test Strategy for Dual Source:
+
+Unit tests: Mock YFinanceSource and KrxSource for a ticker with a designed scenario:
+
+Case1: Yahoo returns complete data (no NaNs) -> ensure no call to KRX and result is Yahoo.
+
+Case2: Yahoo returns DataFrame with NaNs in some entries -> ensure we call KRX and combine. We can simulate Yahoo DataFrame with one column NaN for a particular date, and simulate KRX DataFrame with that date filled. After merge, that date’s value should come from KRX. Also ensure other dates remain from Yahoo if we choose to only patch holes. Alternatively, if we choose to replace entirely, then just ensure output matches KRX.
+
+Case3: Yahoo returns empty DataFrame (e.g., ticker not found) -> should call KRX and use its data entirely.
+
+Case4: source="pykrx" -> should directly return KRX data and ignore Yahoo.
+
+Integration tests: Possibly run against real APIs for a small subset:
+
+Pick a known problematic ticker like 035720.KQ (Kakao) and run with primary yfinance. We expect a warning and that final data includes recent dates (which Yahoo alone wouldn’t have under that ticker). Compare with running primary pykrx to ensure the data is indeed complete.
+
+Pick a normal ticker like 005930.KS and run with both sources to ensure both produce similar results (they should, barring tiny rounding differences). This validates that our merging doesn’t produce anomalies.
+
+Combining Strategy Decision: We need to decide how exactly to merge if partial:
+
+If Yahoo data covers from A to B and then NaNs from B+1 to end, perhaps easiest is to take Yahoo up to B and KRX from B+1 onward and concatenate. How to find B? Find the last index where Yahoo has non-NaN price, and assume after that it’s done.
+
+If Yahoo has random single-day gaps (unlikely for daily data unless an outage), a more granular fill might be needed (fill NaN on that day from KRX while keeping other days from Yahoo). This is doable with combine_first in pandas: df_final = yahoo_df.combine_first(krx_df) which fills NaNs in yahoo_df with values from krx_df where indices align. This one-liner could elegantly handle sporadic NaNs
+pypi.org
+. We must be careful that indices match (dates) and both dataframes have same shape on overlapping range.
+
+If using combine_first, ensure both dataframes have the same index type (e.g., both set index to Date). Since Yahoo might have timezone on index, drop tz or use date only.
+
+Given KRX is very reliable, one approach is: if any doubt, trust KRX entirely for that ticker. However, Yahoo might provide volume and price for foreign stocks which KRX cannot (but those foreign stocks wouldn’t have a KRX fallback anyway). So for Korean stocks, KRX is the source of truth; for foreign (if any in list like US stocks), we have no fallback (we might treat source param globally, i.e., if user chooses pykrx but list has AAPL, PyKRX can’t fetch that – we’d have to decide what to do, maybe just fail or skip with error).
+
+Korean Market Exceptions to Account For:
+
+Exchange holidays: both sources handle implicitly by not listing data.
+
+Ticker naming differences: Already covered (suffix vs none, and possibly some tickers might have different codes if they migrated from KOSDAQ to KOSPI – but KRX code remains same, only suffix changes for Yahoo).
+
+Data timing: If our script runs in the evening right after market close, yfinance might not have the day’s data until a bit later (Yahoo sometimes lags a few minutes or hour). PyKRX might produce the data immediately after 6PM KST. If we run and Yahoo’s latest day is missing or partially zero volume (if market just closed), we could detect that as missing and fetch PyKRX which will have it. This is a benefit of the dual approach to always get the latest official close. So after market close, Yahoo might cause a [WARN] and fallback to KRX for that day’s data. That’s fine.
+
+Corporate actions adjustments: KRX’s adjusted price means historical prices reflect splits. Yahoo does similarly. If a discrepancy arises (maybe Yahoo’s data sometimes has small rounding differences or minor missing adjustments), using KRX data would fix it. The yfinance-cache developer noted that Yahoo data can be “corrupted” around splits/dividends and that he forces price repair
+pypi.org
+. Using KRX as backup essentially gives us a way to verify or correct Yahoo data if we wanted. (We could theoretically compare overlapping data and if a price differs significantly, log something, but that’s beyond scope.)
+
+Fallback Example (Pseudo-code):
+
+df_y = YFinanceSource.fetch(ticker, start, end)
+if not df_y.empty:
+    if df_y.isnull().values.any():
+        print(f"[INFO] Incomplete data from Yahoo for {ticker}, fetching from KRX...")
+        df_k = KrxSource.fetch(ticker, start, end)
+        if df_k.empty:
+            print(f"[ERROR] {ticker}: Yahoo data incomplete and KRX fetch failed.")
+        else:
+            # Fill NaNs in Yahoo data with KRX data
+            df_y.set_index('Date', inplace=True)
+            df_k.set_index('Date', inplace=True)
+            df_comb = df_y.combine_first(df_k)
+            df_comb.reset_index(inplace=True)
+            df = df_comb
+            source_used = "yahoo+krx"
+    else:
+        df = df_y
+        source_used = "yahoo"
+else:
+    print(f"[WARN] Yahoo returned no data for {ticker}, trying KRX...")
+    df = KrxSource.fetch(ticker, start, end)
+    if df.empty:
+        print(f"[ERROR] Failed to retrieve data for {ticker} from both sources.")
+    else:
+        source_used = "krx"
+# now df is ready
+
+
+After this, we save to cache and proceed with validations (including logging [WARN] Missing values... if df still has NaNs, which theoretically it shouldn’t if KRX provided missing values). We might skip missing warning if source_used includes krx, assuming KRX provided complete data. Or we run the check regardless – if KRX data had any NaN (which would be odd, unless stock was halted; KRX might show volume=0 rather than NaN for halts, but not sure if pykrx would put NaN).
+
+Testing fallback with known case: If possible, test on a stock that was delisted in last 5 years. Yahoo would stop at delist date, KRX would give 0s for a few days up to delist. Our code would combine and still have 0 Close for last day (since that’s actual delist). That would trigger missing warning if we consider 0 as missing. Maybe we treat 0 close as missing too for warnings (since a 0 close is not a real trade price, just a code for delist). But that might be more logic – perhaps outside scope.
+
+Unit Testing Strategy Recap:
+
+Create dummy Yahoo and KRX data for a fictitious ticker:
+
+Yahoo data: Jan1–Jan10, but Jan6 and after are NaN (simulate ticker moved).
+
+KRX data: full Jan1–Jan10 actual values.
+
+After combine_first, Jan6–Jan10 should come from KRX, others from Yahoo.
+
+We verify combined DF has no NaNs and matches KRX for Jan6–10 and Yahoo for Jan1–5.
+
+The above can be done without actual API calls by constructing DataFrames manually in test code, injecting them via monkeypatch or by subclassing DataSource classes in test.
+
+Risks & Mitigations:
+
+Mismatch in data between sources: If Yahoo and KRX both provide data but differ (e.g., volume might differ if Yahoo uses a different counting method or currency conversion for some reason), combining might lead to mixed data. We mitigate by largely preferring one source’s data segments entirely.
+
+Performance: Using two sources could slow things. But we only call KRX on problem tickers, which should be few. If network issues cause Yahoo to fail for many, then we’d hit KRX for all and that might be slower (KRX website might throttle heavy use). We can mitigate by adding a slight delay or using the market="ALL" trick to get all in one call (PyKRX can get all KOSPI stocks in one call for a date range
+pypi.org
+, but that returns all stocks in one DataFrame – not practical to parse for just our list).
+
+PyKRX dependency: Ensure to include pykrx in requirements. Also, PyKRX might require some initial setup (it’s pure Python scraping, so just import is fine). If PyKRX were to break due to site change, our fallback could fail. That’s why our design doesn’t solely rely on pykrx; Yahoo is primary.
+
+Time syncing: All data are EOD, so no big concurrency issues. But note if we run when market is open, Yahoo might give partial intraday data if we request up to today (with interval=1d, I think Yahoo won’t give today’s incomplete data at all; it usually gives last fully completed day). KRX obviously only gives completed days (or nothing for today if not finished). So running midday yields same data from both (i.e., up to yesterday).
+
+Testing on Windows: PyKRX uses requests/HTML scraping, should work on Windows. We should verify that our code (especially file path handling with Path) is cross-platform (we used pathlib which is fine, and PyKRX file I/O not involved except we do).
+
+Internationalization: If our universe ever contains non-Korean tickers (like US stocks), our DualSource should be aware not to attempt PyKRX for those. Perhaps by checking suffix: if ticker ends with .KS or .KQ, it’s Korean. If ticker is like AAPL or MSFT or has other known suffix (like .NS for India, etc.), we either restrict or have PyKRX throw an error “Invalid ticker”. We can catch that and simply not fallback in that case. This likely won’t occur if the universe is curated to Korean stocks only for now.
+
+Unit Testing the Integration (Dual scenario): Focus on Korean tickers as that’s where dual matters. For foreign tickers, we can test that source="pykrx" gracefully fails or is not used. Possibly implement: if source param is "pykrx" and a non-Korean ticker encountered, we log an error “Ticker not supported by pykrx” and skip or try Yahoo anyway.
+
+Conclusion: By implementing a flexible data source interface and a fallback mechanism, we can ensure our data handler is robust against Yahoo’s limitations and covers the Korean market intricacies. This abstraction also prepares us for future extensions (e.g., adding Alpha Vantage or other APIs as additional DataSource classes, if needed, without altering the core logic).
+
+Finally, we summarize a Definition of Done (DoD) checklist that incorporates all above aspects to ensure the iteration is successful.
+
+Definition of Done (DoD) Checklist
+
+To conclude, here is a checklist of acceptance criteria and best practices that our Iteration-1 data handler must satisfy:
+
+Project Structure & Execution:
+
+ Module runs with python -m: The data handler can be invoked as python -m src.utils.data_handler from the project root without import errors. No manual sys.path modifications are used.
+
+ Package Initialization: src/ and subpackages have __init__.py files so that Python recognizes the package structure.
+
+ No hard-coded OS-specific paths: File paths constructed via Path or other cross-platform means. Relative paths are resolved based on known file locations, not CWD assumptions
+stackoverflow.com
+. (E.g., the module finds 02_docs/universe/target_tickers.csv reliably on Windows and *nix).
+
+ VSCode/IDE launch: Documented or configured how to run the module in IDE to avoid CWD issues (e.g., use module mode or set working directory).
+
+Functionality:
+
+ Reads input ticker list from 02_docs/universe/target_tickers.csv (UTF-8 SIG) and correctly parses ticker symbols (and optionally their market category).
+
+ Computes date range of the last 5 years up to current day automatically.
+
+ Supports source selection via a parameter or argument (default “yfinance”, optional “pykrx”). If “pykrx” is chosen, all data comes from PyKRX only.
+
+ Caching implemented: Saves data to 04_data/cache/{ticker}_{start}_{end}.csv after download. Reuses this cache on subsequent runs:
+
+If run again with the same date range and cache exists, it loads from file (cache hit).
+
+If data not cached (first run or forced refresh), it downloads (cache miss) and then stores the file.
+
+If a cache file is present but outdated or incomplete, it appropriately refreshes (either whole or part).
+
+ No duplicate downloads: The handler avoids re-downloading data for tickers that were already processed in the same run (e.g., if tickers list has duplicates by mistake, it should handle gracefully) – minor point, likely not needed as input has unique tickers.
+
+ Multi-ticker performance: Uses efficient methods (batch download or threading) to fetch multiple tickers without excessive delay. The solution either uses yf.download with all tickers or another optimized approach. (Measured by the ability to handle ~40 tickers in a reasonable time, e.g., a minute or two).
+
+ Retry with backoff: On network/API errors with yfinance (rate limit or connectivity issues), the module retries a few times with exponential backoff delays
+smythos.com
+. Failures are logged if exceeding retries.
+
+ Ticker normalization: Ensures ticker format is correct for each source (e.g., strips “.KS” for PyKRX calls, and appends suffix if needed for Yahoo).
+
+ PyKRX fallback integration: For KOSPI/KOSDAQ tickers, if Yahoo data is missing or incomplete, the handler retrieves data from PyKRX and merges it:
+
+Correctly maps ticker code and market for PyKRX
+pypi.org
+.
+
+Renames PyKRX columns to match schema.
+
+Merges or replaces data such that final output has no gaps.
+
+ Data schema uniformity: Regardless of source, the final DataFrame for each ticker has columns Date, Open, High, Low, Close, Volume (with Date either as index or first column in CSV). No extra columns unless extended schema is planned.
+
+ Data consistency: If both sources are used, ensure no contradictory values. (Small rounding differences can be ignored; major differences shouldn’t occur).
+
+Logging & Warnings:
+
+ Cache hit/miss logging: Outputs an [INFO] line for each ticker indicating whether data came from cache or was downloaded. E.g. “Cache hit” with date range, or “Downloaded → saved to cache” for misses.
+
+ Download start/completion logging: When fetching from a source, it logs an appropriate message (could be combined with above). For example, “Fetching: TICKER from yfinance...” and after success “Downloaded: TICKER → saved to cache”.
+
+ Fallback logging: If switching to secondary source, it logs an info or warning (e.g., “[INFO] Using pykrx for TICKER due to missing Yahoo data”).
+
+ Missing data warnings: If any missing values (NaNs) remain in the final dataset for a ticker, logs [WARN] Missing values detected in TICKER. Ideally, no such warning should appear after pykrx fallback for Korean tickers (since that should fill gaps), so warnings would indicate either non-Korean ticker issues or something that needs attention (like an IPO with no data for first part of range).
+
+ Schema mismatch or critical error logging: If a cache file has wrong format or a data fetch fails entirely, logs an [ERROR] with details. (e.g., “ERROR: Could not retrieve data for XYZ”).
+
+ No uncontrolled exceptions: The module handles exceptions and logs errors rather than crashing. The program should not abort halfway; it should attempt all tickers and then exit normally (perhaps with a non-zero exit code if any errors occurred, but at least it finishes processing others).
+
+Output & Data Integrity:
+
+ CSV files created: After running for the first time, CSV cache files appear in 04_data/cache/ for at least 3 example tickers (e.g., 삼성전자, SK하이닉스, 카카오 as given). Verify their content roughly (correct columns, plausible data).
+
+ Repeat run uses cache: Running the module again immediately should not trigger downloads for the same date range – logs should show cache hits for those tickers and no warnings (assuming no new trading days have passed).
+
+ Data quality: Spot-check a couple of values against an official source (e.g., last closing price of a ticker) to ensure accuracy. Especially verify that a known non-trading day is not present and that a known dividend or split event was handled properly (prices before/after look continuous if adjusted).
+
+ Unit tests: All new functions (especially those for data fetching, parsing tickers, merging data) are covered by unit tests. (This is an internal DoD item – likely the developer will write tests to validate the behavior.)
+
+ Documentation: The research doc (this document) is completed and placed in 02_docs/research/iter1_data_handler_research.md. It includes the comparisons, decisions, and references (as we have done). The code itself should also have comments explaining tricky parts (like fallback logic).
+
+Licenses & Dependencies:
+
+ Open-source references used are permissible: We referenced MIT/Apache-licensed repositories (yfinance-cache, intraday, PyBroker) and did not incorporate any incompatible licensed code – only ideas and patterns. PyKRX is MIT licensed
+pypi.org
+, so using it is fine.
+
+ PyKRX installation: Ensure pykrx is added to the project requirements, and mention that Windows users might need to install numpy and pandas (pykrx requires them) if not already present.
+
+ Platform compatibility: Test the module on Windows (e.g., using PowerShell or CMD python -m src.utils.data_handler) to verify encoding (UTF-8 SIG CSV reading) and file path handling works. Also test on Linux. The code should not contain any platform-specific path or encoding assumptions.
+
+By adhering to this checklist, we aim to meet all the requirements of Iteration 1 and lay a solid foundation for subsequent iterations of the Endeavour project.
+
+References:
+
+Project work order and requirements
+
+Python packaging & module structure guidelines
+realpython.com
+realpython.com
+
+Intraday caching example (Marcus Schiesser)
+github.com
+
+yfinance-cache usage and caching strategy
+pypi.org
+
+Yahoo API rate-limit handling strategies
+smythos.com
+smythos.com
+
+PyBroker DataSource and caching approach
+pybroker.com
+pybroker.com
+
+PyKRX usage for OHLCV data
+pypi.org
+pypi.org
+
+Stack Overflow discussions on multi-threading yfinance and NaN issues

@@ -1,0 +1,86 @@
+### **Endeavour 프로젝트 통합 문서 (IPD) v27.0**
+
+```
+Endeavour 프로젝트 통합 문서 (IPD)
+이 문서는 프로젝트의 살아있는 기록(Living Document)이다.
+Adjutant-Gemini는 본 문서를 최신 상태로 유지할 책임이 있으며, 모든 설계 변경, 이력, 로드맵 업데이트를 능동적으로 관리해야 한다.
+
+VERSION: 27.0
+PROJECT STATUS: IN PROGRESS - Milestone 5.6 (Principle Compliance Refactoring v3.1)
+
+A. 설계 노트 (Design Notes)
+
+v6.0 (2025-09-18)
+**신규 설계 원칙 확립: "모든 보조지표는 명시적인 ID를 가진다(All Indicators Must Have an Explicit ID)".**
+백테스팅 시스템 전반에 걸쳐 보조지표 이름 불일치로 인한 '소리 없는 실패' 문제를 근본적으로 해결하기 위해, 모든 전략 파일의 'indicators' 항목에 고유한 'id' 필드를 포함하는 것을 의무화한다. 이 'id'는 데이터 계산, 조건 검사, 시각화에 이르는 모든 과정에서 보조지표를 식별하는 유일한 키로 사용된다.
+
+v5.0 (2025-09-18)
+백테스트 결과의 신뢰성 및 해석 가능성(Interpretability)을 확보하기 위해 `ReportGenerator`에 Plotly 기반의 '인터랙티브 시그널 차트' 생성 기능을 통합하기로 결정. 사용자는 이를 통해 모든 거래의 진입/청산 근거를 시각적으로 직접 검증할 수 있음.
+
+v4.0 (2025-09-18) - [재확인 및 준수]
+**설계 원칙 확립: '모든 연산은 인디케이터에서(All Calculations in Indicators)'.** `Backtester`는 조건문(`conditions`) 내에서 `Low60 * 1.5`와 같은 실시간 연산을 지원하지 않는다. 모든 계산 로직은 사전에 `indicators` 섹션에 별도의 지표로 명확히 정의하고, 조건문에서는 선언된 지표 이름만 참조해야 시스템의 안정성과 예측 가능성을 확보할 수 있다.
+
+v3.0 (2025-09-16) - Based on Gemini-Commander Review
+백테스트 엔진: 2-Stage 하이브리드 워크플로우 도입. 1단계 신속 검증(backtesting.py)과 2단계 심층 분석(Endeavour Framework)을 결합하여 속도와 깊이를 모두 확보한다.
+엔진 유연성 강화: `crosses_above`, `crosses_below` 연산자 및 중첩된 논리(`AND`/`OR`)를 처리할 수 있는 재귀적 규칙 엔진(Recursive Rule Engine)을 도입한다.
+
+v2.0 (2025-09-15) - Based on ChatGPT Code Review
+사용자 입력 최소화: `config.json`을 도입하여 티커 목록, 초기 자본금, 백테스트 기간 등 자주 변경되는 설정을 외부 파일로 분리한다.
+데이터 관리 효율화: 데이터 다운로드 및 로딩을 전담하는 `DataLoader` 클래스를 신설하여 코드의 재사용성을 높인다.
+객체 지향 설계 강화: `IndicatorCalculator`, `PerformanceAnalyzer`, `ReportGenerator` 등 각 기능별 클래스를 분리하여 코드의 모듈성과 확장성을 확보한다.
+
+v1.0 (2025-09-15)
+초기 설계: 단일 스크립트 기반의 순차적 실행 구조. Matplotlib을 사용한 기본적 리포팅 기능 포함.
+
+B. 변경 이력 (Change Log)
+형식: YYYY-MM-DD / 작성자 / 변경 내용 요약
+
+2025-09-18 / adjutant-gemini / v3.1 설계 원칙 준수 리팩토링. IPD v4.0 설계 원칙을 위반했던 Backtester의 eval() 함수를 완전히 제거. IndicatorCalculator에 CALC 타입을 추가하여 모든 연산이 지표 단에서 사전 처리되도록 시스템을 재설계. 이로써 '소리 없는 실패'의 근본 원인을 최종 해결.
+2025-09-18 / adjutant-gemini / v3.0 치명적 버그 수정. IndicatorCalculator에 누락되었던 MIN/MAX 지표 계산 로직을 추가하여 '소리 없는 실패' 문제를 최종 해결.
+2025-09-18 / adjutant-gemini / v2.9 설계 리팩토링. '소리 없는 실패' 버그의 근본 원인인 보조지표 이름 불일치 문제를 해결하기 위해, 전략 파일에 'id' 필드를 의무화하는 신규 설계 원칙 도입. IndicatorCalculator 및 ReportGenerator 로직 수정.
+2025-09-18 / adjutant-gemini / v2.8 버그 수정. `generate_interactive_signal_chart`에서 발생한 `KeyError: 'entry_date'` 해결. ChatGPT의 제안을 검토, 'scale-in' 시나리오에서 발생할 수 있는 논리적 오류를 발견하고 '포지션' 단위로 최초 진입 정보를 관리하도록 `Portfolio` 및 `Backtester` 로직을 재설계하여 안정성 확보.
+2025-09-18 / adjutant-gemini / v2.7 버그 수정. `generate_interactive_signal_chart` 메소드에서 동적으로 indicator ID를 생성하지 않아 발생하던 `KeyError: 'id'` 해결.
+2025-09-18 / adjutant-gemini / Milestone 5.6 착수. Plotly 기반 '거래 시점 시각화 검증 시스템' 구축 시작. IPD v22.0 업데이트.
+2025-09-18 / adjutant-gemini / v2.5 버그 수정. DataLoader의 유니버스 필터링 로직 수정. pykrx 라이브러리가 당일 데이터를 조회할 때 발생하는 ValueError 해결. stock.get_nearest_business_day_in_a_week()를 사용하여 가장 최근의 영업일 기준으로 필터링하도록 변경.
+2025-09-18 / adjutant-gemini / Milestone 5.4 완료. v2.4 제안. 포트폴리오 성과 왜곡 문제를 해결하기 위해 '일일 수익률 평균' 방식의 포트폴리오 자산 곡선 재계산 로직 도입.
+2025-09-17 / adjutant-gemini / Milestone 5.3 완료. v2.3 제안. 연간 수익률 분석 테이블 및 AI 코멘트 기능 추가.
+2025-09-17 / adjutant-gemini / Milestone 5.2 완료. v2.2 제안. 포트폴리오 종합 리포트 생성 기능 추가.
+2025-09-17 / adjutant-gemini / Milestone 5.1 완료. v2.1 제안. 개별 종목 성과 리포트(`*.html`) 및 거래 로그(`*.csv`) 생성 기능 추가.
+2025-09-16 / adjutant-gemini / Milestone 5 (유니버스 필터링) 완료. `config.json`과 연동되는 동적 유니버스 필터링 기능 구현.
+2025-09-16 / adjutant-gemini / Milestone 4 (전략 최적화) 완료. `Optimizer` 클래스 도입 및 단일/다중 파라미터 최적화 기능 구현.
+2025-09-16 / adjutant-gemini / Milestone 3 (전략 파일) 완료. `*.json` 형식의 외부 전략 파일 로딩 기능 구현.
+2025-09-15 / adjutant-gemini / Milestone 2.5 (통합 최적화 시스템) 완료. 고도화된 청산 규칙 및 손절매 최적화 시스템 통합 완료.
+2025-09-15 / adjutant-gemini / Milestone 2 완료. 기본 백테스트 엔진 구축 성공.
+2025-09-15 / adjutant-gemini / '사전 연구 및 설계 제안 프로토콜' 수립.
+2025-09-15 / adjutant-gemini / '3-Tier 세션 모델' 원칙 수립.
+2025-09-15 / adjutant-gemini / '완전한 문서 출력 원칙' 수립 및 IPD에 명시.
+2025-09-15 / adjutant-gemini / ChatGPT 코드 리뷰 결과 반영. IPD의 '설계 노트' 및 '로드맵'을 v2.0으로 업데이트.
+2025-09-15 / adjutant-gemini / IPD 중심의 단일 문서 관리 체계로 전환.
+2025-09-15 / adjutant-gemini / 'Append-Only' 문서 이력 관리 원칙 수립.
+2025-09-15 / adjutant-gemini / 프로젝트 운영 시스템 수립 (프로젝트 세션-Gems 역할 분리).
+
+C. 프로젝트 로드맵 (Roadmap)
+v13.0 (2025-09-18)
+
+Phase 1: Core Engine Development (완료)
+[x] Milestone 1 ~ 4
+
+Phase 2: Optimization & Reporting (완료)
+[x] Milestone 5: 유니버스 필터링 기능 구현
+[x] Milestone 5.1: 개별 리포트 및 로그 생성
+[x] Milestone 5.2: 포트폴리오 종합 리포트 생성
+[x] Milestone 5.3: 연간 수익률 분석 및 AI 코멘트
+[x] Milestone 5.4: 포트폴리오 성과 왜곡 문제 해결
+
+Phase 3: Practical Strategy R&D (진행 중)
+[ ] Milestone 5.5: 2-Stage 하이브리드 워크플로우 구축
+[ ] Milestone 5.6: 거래 시점 시각화 검증 시스템 구축. Plotly 기반의 인터랙티브 차트를 도입하여 모든 거래 시점의 가격, 보조지표, 시그널을 시각적으로 검증하는 기능 구현.
+[ ] Milestone 6: '삼중창 스크리닝' 전략 연구 개발
+[ ] Milestone 7: 자금 관리(Position Sizing) 전략 고도화
+[ ] Milestone 8: Monte Carlo 시뮬레이션 도입
+
+Phase 4: Automation & Deployment (예정)
+[ ] Milestone 9: 자동 실행 및 스케줄링 기능
+[ ] Milestone 10: 실시간 알림 및 모니터링 시스템
+
+```
