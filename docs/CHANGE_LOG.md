@@ -1,3 +1,7 @@
+## 2025-10-03 (repo_tree 관리 원칙 확정)
+- repo_tree는 최신본 하나만 유지하는 방식으로 확정
+- docs/repo_tree_latest.txt 경로에서만 관리
+- 루트 및 repo_trees/에 생성된 누적본은 정리 대상
 ## 2025-10-03 (폴더 구조 정리)
 - src/utils 폴더 제거 (중복 구조 정리)
 - src/endeavour/utils/*.bak → Archives/Legacy_Code/ 이동
