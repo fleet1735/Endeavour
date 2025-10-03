@@ -18,3 +18,8 @@
 - 캐시: *_None_None.csv 전면 제거, 규칙 {ticker}_{start}_{end}.csv로 통일
 - 보안: Archives/API_Key/* Git 추적 제외 및 안전 이동 (D:\SecureKeys)
 - 로그 관리: data/logs → 날짜별 회전, 30일 보존/180일 삭제, Git 제외
+
+### 📑 로그 및 캐시 관리 원칙 (2025-10-04 보강)
+- 로그 정리 스크립트는 PowerShell에서 **수동 실행**하는 것을 원칙으로 한다.
+- PowerShell 프로필($PROFILE)에는 등록하지 않는다. (자동 실행 시 Git 커밋 과부하 방지)
+- data/cache/* 파일은 Git 추적 대상에서 제외한다. (언제든 data_handler 실행으로 재생성 가능)

@@ -91,3 +91,10 @@
 - 캐시: *_None_None.csv 제거, {ticker}_{start}_{end}.csv 규칙 통일
 - 보안: Archives/API_Key/* Git 추적 제외, .gitignore 등록, D:\SecureKeys로 이동
 - 로그 관리: data/logs 회전({name}_YYYY-MM-DD.log), 30일 보존/180일 삭제, Git 제외
+
+### 📦 세션 인수인계 지침 보강 (2025-10-04)
+- cache: Git 제외, 필요시 data_handler로 재생성
+- reports: Git 보존 (분석/검증 결과물)
+- logs: Git 제외, 30일 보존 후 archive, 180일 삭제
+- archives: 완료 문서 및 불필요 파일은 Archives 하위로 이동
+- 보안: API Key는 D:\SecureKeys 또는 환경변수에서 불러오기, 절대 Git 포함 금지

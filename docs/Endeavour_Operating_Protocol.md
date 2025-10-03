@@ -87,3 +87,18 @@
 ### 🔧 운영 규칙 보강 (2025-10-03 ~ 2025-10-04)
 - repo_tree 관리: docs/repo_tree_latest.txt만 유지, 누적본 생성 금지
 - 로그 관리: data/logs는 Git 추적 제외, 30일 보존 후 archive, 180일 삭제
+
+### 🔐 보안·운영 관리 규칙 (2025-10-04 보강)
+- 보안 키 관리
+  - 민감한 API Key는 반드시 **Git 추적 제외** 처리한다. (Archives/API_Key/* 금지)
+  - 운용 시 API Key는 로컬 환경변수 또는 보안 경로(D:\SecureKeys)에서 불러온다.
+  - 코드에는 키를 직접 포함하지 않고, 환경변수/로컬 config 호출 방식을 사용한다.
+  - API Key는 외부 공유 불가, 필요 시 재발급받는다.
+
+- 보고/리포트 관리
+  - reports 폴더 산출물(예: data_quality/validation_*.csv)은 **Git에 보존**한다.
+  - logs 폴더는 Git 추적 제외. (30일 보존, 180일 삭제)
+
+- Archives 관리
+  - 완료된 작업 지시서 및 불필요 중복 문서는 **Archives/** 하위로 이동한다.
+  - 현재 Iteration_1_WorkOrder.md는 Legacy_Docs에 보관 중.
