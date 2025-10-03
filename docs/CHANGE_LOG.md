@@ -1,3 +1,7 @@
+## 2025-10-03 (폴더 구조 정리)
+- src/utils 폴더 제거 (중복 구조 정리)
+- src/endeavour/utils/*.bak → Archives/Legacy_Code/ 이동
+- IPD.md 실행 규칙 src.utils → src.endeavour.utils 로 갱신
 ## 2025-10-03 (인프라 정비)
 - 문서 체계 및 인프라 정비 개시
 - IPD.md 최신화 (갱신일 반영, 보안/캐시 관리 원칙 추가)
