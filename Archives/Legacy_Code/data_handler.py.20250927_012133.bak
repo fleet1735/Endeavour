@@ -1,0 +1,201 @@
+﻿from __future__ import annotations
+import argparse, logging, sys
+from pathlib import Path
+from datetime import datetime
+import pandas as pd
+import yfinance as yf
+import numpy as np
+
+try:
+    from pykrx import stock
+except Exception:
+    stock = None
+
+VERSION = "data_handler v1.5 | 2025-09-27 01:10 KST"
+
+# ---------------- Paths & Logger ----------------
+BASE_DIR = Path(__file__).resolve().parents[3]  # .../Endeavour
+DOCS_DIR = BASE_DIR / "02_docs"
+UNIVERSE_CSV = DOCS_DIR / "universe" / "target_tickers.csv"
+CACHE_DIR = BASE_DIR / "04_data" / "cache"
+REPORT_DIR = BASE_DIR / "03_reports" / "data_quality"
+CACHE_DIR.mkdir(parents=True, exist_ok=True)
+REPORT_DIR.mkdir(parents=True, exist_ok=True)
+LOG_FILE = BASE_DIR / "logs" / "data_handler.log"
+LOG_FILE.parent.mkdir(exist_ok=True)
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[logging.StreamHandler(sys.stdout),
+              logging.FileHandler(LOG_FILE, encoding="utf-8")],
+)
+log = logging.getLogger("data_handler")
+
+REQUIRED_COLS = ["Open","High","Low","Close","Volume"]
+
+# ---------------- Universe ----------------
+def load_universe(path: Path = UNIVERSE_CSV) -> pd.DataFrame:
+    if not path.exists():
+        raise FileNotFoundError(f"Universe CSV not found: {path}")
+    df = pd.read_csv(path, encoding="utf-8-sig")
+    need = {"구분","순위","종목명?,"Ticker"}
+    if not need.issubset(df.columns):
+        raise ValueError(f"Universe CSV schema mismatch. need={need}, got={set(df.columns)}")
+    log.info(f"Universe loaded: {len(df)} tickers from {path}")
+    return df
+
+# ---------------- Fetchers ----------------
+def fetch_yf(ticker: str, start: str, end: str) -> pd.DataFrame:
+    try:
+        df = yf.download(ticker, start=start, end=end, progress=False, auto_adjust=False)
+        if df is None or df.empty:
+            log.warning(f"[YF] empty: {ticker}")
+            return pd.DataFrame()
+        df = df[REQUIRED_COLS].copy()
+        df.index.name = "Date"
+        return df
+    except Exception as e:
+        log.error(f"[YF] {ticker}: {e}")
+        return pd.DataFrame()
+
+def fetch_krx(ticker: str, start: str, end: str) -> pd.DataFrame:
+    if stock is None:
+        log.warning("[KRX] pykrx not installed; skip fallback")
+        return pd.DataFrame()
+    try:
+        code = ticker.split(".")[0]
+        s, e = start.replace("-",""), end.replace("-","")
+        df = stock.get_market_ohlcv_by_date(s, e, code)
+        if df is None or df.empty:
+            log.warning(f"[KRX] empty: {ticker}")
+            return pd.DataFrame()
+        df = df.rename(columns={"?쒓?":"Open","怨좉?":"High","?媛":"Low","醫낃?":"Close","嫄곕옒??:"Volume"})
+        df.index = pd.to_datetime(df.index)
+        df.index.name = "Date"
+        return df[REQUIRED_COLS]
+    except Exception as ex:
+        log.error(f"[KRX] {ticker}: {ex}")
+        return pd.DataFrame()
+
+# ---------------- Validation & Cache ----------------
+def validate_extended(df: pd.DataFrame, start: str, end: str) -> dict:
+    """?곗씠???덉쭏 寃利?(寃곌낵 dict 由ы꽩)"""
+    result = {
+        "Rows": int(len(df)) if df is not None else 0,
+        "MissingDays": 0,
+        "NaNRatio": 0.0,
+        "NaNStreak": 0,
+        "AbnormalClose": False,
+        "Result": "OK",
+    }
+
+    if df is None or df.empty:
+        result["Result"] = "FAIL_EMPTY"
+        return result
+
+    need = set(REQUIRED_COLS)
+    if not need.issubset(df.columns):
+        result["Result"] = "FAIL_SCHEMA"
+        return result
+
+    # NaN 鍮꾩쑉
+    denom = max(len(df) * len(REQUIRED_COLS), 1)
+    nan_ratio = float(df[REQUIRED_COLS].isna().sum().sum()) / denom
+    result["NaNRatio"] = nan_ratio
+    if nan_ratio > 0.05:
+        result["Result"] = "WARN_NAN"
+
+    # ?곗냽 NaN (Close 湲곗?)
+    if "Close" in df.columns:
+        streak = (df["Close"].isna().astype(int)
+                  .groupby(df["Close"].notna().astype(int).cumsum()).cumsum().max())
+        if pd.notna(streak) and int(streak) >= 5:
+            result["NaNStreak"] = int(streak)
+            result["Result"] = "WARN_NAN_STREAK"
+
+    # ?곸뾽??而ㅻ쾭由ъ?
+    bizdays = pd.date_range(start=start, end=end, freq="B")
+    missing = set(bizdays.date) - set(df.index.date)
+    result["MissingDays"] = int(len(missing))
+    if result["MissingDays"] > 2:
+        result["Result"] = "WARN_MISSING"
+
+    # 鍮꾩젙??媛?
+    if (df["Close"] <= 0).any():
+        result["AbnormalClose"] = True
+        result["Result"] = "WARN_ABNORMAL"
+
+    return result
+
+def cache_path(ticker: str, start: str, end: str) -> Path:
+    return CACHE_DIR / f"{ticker}_{start}_{end}.csv"
+
+def load_cache(p: Path) -> pd.DataFrame:
+    if p.exists():
+        try:
+            df = pd.read_csv(p, parse_dates=["Date"], index_col="Date")
+            log.info(f"[CACHE] hit: {p.name}")
+            return df
+        except Exception as e:
+            log.warning(f"[CACHE] read fail {p.name}: {e}")
+    return pd.DataFrame()
+
+def save_cache(df: pd.DataFrame, p: Path):
+    df.to_csv(p, encoding="utf-8-sig")
+    log.info(f"[CACHE] saved: {p.name} ({len(df):,} rows)")
+
+# ---------------- Orchestrator ----------------
+def process_ticker(t: str, start: str, end: str, source: str, force: bool=False) -> dict:
+    cp = cache_path(t, start, end)
+    df = pd.DataFrame() if force else load_cache(cp)
+
+    if df.empty:
+        df = fetch_yf(t, start, end) if source == "yfinance" else fetch_krx(t, start, end)
+        first_try = validate_extended(df, start, end)
+        if first_try["Result"].startswith("FAIL"):
+            log.warning(f"[{t}] invalid from {source} ??fallback KRX")
+            df = fetch_krx(t, start, end)
+        if not df.empty:
+            save_cache(df, cp)
+
+    # ??긽 理쒖쥌 寃利?
+    result = validate_extended(df, start, end)
+    if result["Result"].startswith("FAIL"):
+        log.error(f"[{t}] FAIL: {result}")
+    elif result["Result"].startswith("WARN"):
+        log.warning(f"[{t}] WARN: {result}")
+    else:
+        log.info(f"[{t}] OK ({len(df):,} rows)")
+
+    return {"Ticker": t, **result}
+
+def run(start: str, end: str, source: str, force: bool):
+    uni = load_universe()
+    results = []
+    for _, row in uni.iterrows():
+        t = str(row["Ticker"]).strip()
+        r = process_ticker(t, start, end, source, force)
+        results.append(r)
+
+    # 由ы룷?????(??긽 ?섑뻾)
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    report_path = REPORT_DIR / f"validation_{ts}.csv"
+    pd.DataFrame(results).to_csv(report_path, index=False, encoding="utf-8-sig")
+    log.info(f"[REPORT] Saved validation report ??{report_path}")
+
+def parse_args():
+    today = datetime.today().strftime("%Y-%m-%d")
+    p = argparse.ArgumentParser(description="Endeavour Data Handler")
+    p.add_argument("--source", choices=["yfinance","pykrx"], default="yfinance")
+    p.add_argument("--start", default="2020-01-01")
+    p.add_argument("--end", default=today)
+    p.add_argument("--force", action="store_true")
+    return p.parse_args()
+
+if __name__ == "__main__":
+    args = parse_args()
+    log.info(f"{VERSION}")
+    log.info(f"RUN source={args.source} range={args.start}..{args.end} force={args.force}")
+    run(args.start, args.end, args.source, args.force)
+
