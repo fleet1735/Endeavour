@@ -1,4 +1,0 @@
-﻿Rows,MissingDays,NaNRatio,NaNStreak,AbnormalClose,Result,Ticker
-1409,90,0.0007,1,False,ERROR: '<=' not supported between instances of 'str' and 'int',005930.KS
-1409,90,0.0007,1,False,ERROR: '<=' not supported between instances of 'str' and 'int',000660.KS
-1409,90,0.0007,1,False,ERROR: '<=' not supported between instances of 'str' and 'int',035720.KS
