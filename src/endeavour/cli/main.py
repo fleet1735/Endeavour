@@ -21,7 +21,7 @@ def main(argv=None):
     sp1.set_defaults(func=cmd_ingest)
 
     sp2 = sub.add_parser("backtest", help="Run parallel backtests")
-    sp2.add_argument("--strategy", required=False, default="docs/strategy_examples/sma_cross.json")
+    sp2.add_argument("--strategy", required=False, default="docs/setup_examples/sma_cross.json")
     sp2.add_argument("--universe", required=False, default="docs/universe/target_tickers.csv")
     sp2.set_defaults(func=cmd_backtest)
 
@@ -30,3 +30,4 @@ def main(argv=None):
 
 if __name__ == "__main__":
     sys.exit(main())
+
