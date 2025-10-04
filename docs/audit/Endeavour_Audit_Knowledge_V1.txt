@@ -1,0 +1,161 @@
+--- SECTION START: META
+title: Endeavour Audit Knowledge V1
+generated_at: 2025-10-05 01:34:57 KST
+source_repo: https://github.com/fleet1735/Endeavour.git
+note: 이 파일은 registry.yaml · validator.py의 현재 버전(V1.0.1)을 결합한 감사/지식 레퍼런스입니다.
+--- SECTION END: META
+
+--- SECTION START: EXTERNAL LINKS
+# (필요 시 확장 가능) 기본 저장소
+REPOSITORY: https://github.com/fleet1735/Endeavour.git
+--- SECTION END: EXTERNAL LINKS
+
+--- SECTION START: REGISTRY.YAML (v1.0.1)
+entities:
+  - name: ComplianceAudit
+    description: "감사 추적 및 내부통제 기록"
+    properties:
+      - name: audit_id
+        type: string
+      - name: finding_severity
+        type: enum[Low,Medium,High,Critical]
+      - name: reviewer
+        type: string
+      - name: timestamp
+        type: datetime
+      - name: corrective_action
+        type: string
+
+  - name: RegulatoryFiling
+    description: "금융감독원 및 외부 규제기관 보고서 제출 기록"
+    properties:
+      - name: filing_id
+        type: string
+      - name: jurisdiction
+        type: string
+      - name: submission_date
+        type: datetime
+      - name: status
+        type: enum[Draft,Submitted,Approved,Rejected]
+      - name: reviewer
+        type: string
+
+  - name: CustomerComplaint
+    description: "고객 불만 접수 및 해결 내역"
+    properties:
+      - name: complaint_id
+        type: string
+      - name: category
+        type: enum[Execution,Service,Fee,Other]
+      - name: severity
+        type: enum[Low,Medium,High]
+      - name: resolution_status
+        type: enum[Pending,InProgress,Resolved,Escalated]
+      - name: response_time_hours
+        type: number
+        min: 0
+        max: 240
+
+  - name: SignalEvent
+    description: "트레이딩 시그널 발생 이벤트"
+    properties:
+      - name: signal_id
+        type: string
+      - name: confidence_score
+        type: float
+        min: 0
+        max: 1
+      - name: volatility_adjusted
+        type: bool
+      - name: signal_latency_ms
+        type: int
+        min: 0
+        max: 10000
+        unit: "ms"
+      - name: source_reliability
+        type: float
+        min: 0
+        max: 1
+      - name: data_integrity_score
+        type: float
+        min: 0
+        max: 1
+      - name: redundancy_ratio
+        type: float
+        min: 0
+        max: 10
+        unit: "ratio"
+      - name: override_flag
+        type: bool
+      - name: updated_at
+        type: datetime
+
+  - name: Strategy
+    description: "전략 메타데이터 및 실행 파라미터"
+    properties:
+      - name: strategy_id
+        type: string
+      - name: expected_sharpe
+        type: float
+        min: -1
+        max: 5
+      - name: drawdown_limit
+        type: float
+        min: 0
+        max: 1
+      - name: position_sizing_rule
+        type: string
+      - name: risk_budget
+        type: float
+        min: 0
+        max: 1
+      - name: execution_latency_limit
+        type: int
+        min: 0
+        max: 5000
+        unit: "ms"
+      - name: compliance_mode
+        type: enum[Strict,Moderate,Flexible]
+      - name: last_audit_date
+        type: datetime
+
+--- SECTION END: REGISTRY.YAML (v1.0.1)
+
+--- SECTION START: VALIDATOR.PY (v1.0.1)
+import datetime
+
+def validate_signal(signal):
+    """
+    신호 검증 함수 (Edge Case 5종 포함)
+    """
+    errors = []
+
+    # Case 1: 가격/시그널 동시 업데이트 충돌
+    if signal.get("price_update_time") == signal.get("signal_time"):
+        errors.append("CF-101: Price and Signal updated simultaneously - risk of race condition")
+
+    # Case 2: 시장 데이터 지연
+    if signal.get("data_delay_ms", 0) > 3000:
+        errors.append("CF-102: Market data latency exceeds threshold")
+
+    # Case 3: 신호 신뢰도 하락
+    if signal.get("confidence_score", 1) < 0.3:
+        errors.append("CF-103: Low confidence signal detected")
+
+    # Case 4: 중복 신호 (최근 5초 내 동일 ID 발생)
+    if "recent_signals" in signal:
+        now = datetime.datetime.now()
+        for prev in signal["recent_signals"]:
+            if prev["id"] == signal["id"] and (now - prev["timestamp"]).seconds < 5:
+                errors.append("CF-104: Duplicate signal within 5s window")
+
+    # Case 5: 오버라이드 플래그 + 무효 신호
+    if signal.get("override_flag") and signal.get("confidence_score", 1) < 0.1:
+        errors.append("CF-105: Invalid override on low-confidence signal")
+
+    if not errors:
+        return {"status": "OK"}
+    else:
+        return {"status": "FAIL", "errors": errors}
+
+--- SECTION END: VALIDATOR.PY (v1.0.1)
