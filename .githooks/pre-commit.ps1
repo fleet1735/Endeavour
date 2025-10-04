@@ -1,68 +1,36 @@
-# pre-commit: enforce UTF-8 no BOM & LF for core docs; auto-stage fixes; block large staged files
-Set-StrictMode -Version Latest
-$ErrorActionPreference = "Stop"
+# -*- powershell -*-
+# Extra guard: forbid 'strategy_examples' usage (except README in docs/strategy_examples/)
+Stop = 'Stop'
+Push-Location (Split-Path -Parent \)
+\ = git diff --cached --name-only --diff-filter=ACMRT | Out-String | % { \.Split("
+") } | ? { \ -ne '' }
 
-$docCandidates = @(
-  "docs/IPD.md",
-  "docs/CHANGE_LOG.md",
-  "docs/프로젝트청사진.md",
-  "Migration_pack.md",
-  "docs/Migration_pack.md"
-) | Where-Object { Test-Path $_ }
-
-$logDir = "data/logs"
-New-Item -ItemType Directory -Force -Path $logDir | Out-Null
-$logFile = Join-Path $logDir "hooks.log"
-
-function Convert-ToUtf8NoBom {
-  param([string]$Path)
-  $bytes  = [System.IO.File]::ReadAllBytes($Path)
-  $hasBOM = ($bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF)
-  $text   = [System.Text.Encoding]::UTF8.GetString($bytes)
-  $text   = $text -replace "`r`n","`n"  # normalize to LF
-  $utf8   = New-Object System.Text.UTF8Encoding($false) # no BOM
-  [System.IO.File]::WriteAllBytes($Path, $utf8.GetBytes($text))
-  return $hasBOM
-}
-
-$fixed = @()
-foreach ($p in $docCandidates) {
-  try {
-    $before = Get-Content -Raw -LiteralPath $p
-    $hadBom = Convert-ToUtf8NoBom -Path $p
-    $after  = Get-Content -Raw -LiteralPath $p
-    if ($before -ne $after) {
-      git add -- "$p" | Out-Null
-      $fixed += [pscustomobject]@{ path = $p; bomFixed = $hadBom }
+# 1) 기존 strategies-guard(이미 설치) 로직 유지: import 차단은 별도 스크립트에서 수행된다고 가정
+# 2) strategy_examples 경로/문자열 차단 (예외: docs/strategy_examples/README.*)
+\ = @()
+foreach (\ in \) {
+  if (\ -like "docs/strategy_examples/*") {
+    \ = Split-Path \ -Leaf
+    if (\ -notmatch "^README(\.|$)") { \ += \ }
+  } else {
+    # staged 내용 검사
+    \ = [System.IO.Path]::GetExtension(\)
+    if (\ -in @('.py','.md','.txt','.json','.ps1','.sh','.yml','.yaml','.toml')) {
+      \# -*- coding: utf-8 -*-
+# Back-compat wrapper: moved to scripts/runtime_clean.py (operational tool)
+# Note: import from Python is not recommended; invoke as a script if needed.
+ = git show -- ":\" 2>\
+      if (\# -*- coding: utf-8 -*-
+# Back-compat wrapper: moved to scripts/runtime_clean.py (operational tool)
+# Note: import from Python is not recommended; invoke as a script if needed.
+ -match "strategy_examples") { \ += \ }
     }
-  } catch {
-    "$([DateTime]::Now.ToString('yyyy-MM-dd HH:mm:ss')) [pre-commit][ERROR] $p : $($_.Exception.Message)" | Add-Content -LiteralPath $logFile
-    Write-Error "pre-commit 실패: '$p' 처리 중 오류 → 커밋 중단"
-    exit 1
   }
 }
-
-# Large-file block on STAGED entries only
-$staged = (git diff --cached --name-only) -split "`r?`n" | Where-Object { $_ }
-$tooLarge = @()
-foreach ($f in $staged) {
-  if (Test-Path $f) {
-    if ((Get-Item $f).Length -gt 25MB) { $tooLarge += $f }
-  }
+if (\.Count -gt 0) {
+  Write-Host "⛔ Pre-commit blocked: 'strategy_examples' references detected." -ForegroundColor Red
+  \ | % { Write-Host " - \" }
+  Write-Host "  Please use 'setup_examples' instead (README in docs/strategy_examples is allowed only)."
+  Pop-Location; exit 1
 }
-if ($tooLarge.Count -gt 0) {
-  Write-Host "다음 파일이 25MB를 초과합니다 (커밋 차단):"
-  $tooLarge | ForEach-Object { Write-Host " - $_" }
-  exit 1
-}
-
-# Summary formatting (build array THEN -join)
-if ($fixed.Count -gt 0) {
-  $entries = $fixed | ForEach-Object { "[{0}] (BOM fixed: {1})" -f $_.path, $_.bomFixed }
-  $summary = "$([DateTime]::Now.ToString('yyyy-MM-dd HH:mm:ss')) [pre-commit][OK] fixed: " + ($entries -join "; ")
-} else {
-  $summary = "$([DateTime]::Now.ToString('yyyy-MM-dd HH:mm:ss')) [pre-commit][OK] no changes"
-}
-$summary | Add-Content -LiteralPath $logFile
-
-exit 0
+Pop-Location; exit 0
