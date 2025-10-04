@@ -1,0 +1,14 @@
+{
+  "metadata": { "name": "SMA Cross (Demo)", "version": "1.0" },
+  "indicators": [
+    {"id": "fast", "type": "SMA", "params": {"n": 5}},
+    {"id": "slow", "type": "SMA", "params": {"n": 20}}
+  ],
+  "entry_rules": [
+    {"left": "fast", "op": ">", "right": "slow"}
+  ],
+  "exit_rules": [
+    {"left": "fast", "op": "<", "right": "slow"}
+  ]
+}
+
