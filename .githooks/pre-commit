@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+if git diff --cached --name-only | grep -E '\.py$' | xargs grep -E 'from\s+endeavour\.strategies' -l > /dev/null; then
+  echo '❌ Forbidden import: endeavour.strategies (use endeavour.setups)' >&2
+  exit 1
+fi
+exit 0
