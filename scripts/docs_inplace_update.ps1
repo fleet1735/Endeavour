@@ -7,7 +7,7 @@ function FindDoc([string]$name) {
 }
 function EditDoc([string]$Path) {
   if (!(Test-Path $Path)) { Set-Content -Path $Path -Value "# $Path
-" -Encoding utf8NoBOM }
+" -Encoding UTF8 }
   $before = Get-Content -Raw -Path $Path -Encoding UTF8
 
   $t = $before
@@ -29,7 +29,7 @@ function EditDoc([string]$Path) {
 
   # 내용이 바뀐 경우에만 저장 (백업 없음)
   if ($t -ne $before) {
-    Set-Content -Path $Path -Value $t -Encoding utf8NoBOM
+    Set-Content -Path $Path -Value $t -Encoding UTF8
     return True
   }
   return False
@@ -48,7 +48,7 @@ $changed = (EditDoc $MIG) -or $changed
 
 # CHANGE_LOG: 실제 변경이 있었을 때만 prepend
 if ($changed) {
-  if (!(Test-Path $CHG)) { Set-Content -Path $CHG -Value '' -Encoding utf8NoBOM }
+  if (!(Test-Path $CHG)) { Set-Content -Path $CHG -Value '' -Encoding UTF8 }
   $now = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
   $entry = "## [$now] docs refresh (Drive in-place)
 - 용어/실행 예시 보정 및 안내 갱신
@@ -56,7 +56,7 @@ if ($changed) {
   $cur = Get-Content -Raw -Path $CHG -Encoding UTF8
   if (-not $cur.StartsWith($entry)) {
     Set-Content -Path $CHG -Value ($entry + "
-" + $cur) -Encoding utf8NoBOM
+" + $cur) -Encoding UTF8
   }
 }
 
@@ -69,5 +69,6 @@ $idx = @"
 - ingest:  python -m endeavour.cli ingest --universe docs/universe/target_tickers.csv
 - backtest:python -m endeavour.cli backtest --setup docs/setup_examples/sma_cross.json
 "@
-Set-Content -Path $IDX -Value $idx -Encoding utf8NoBOM
+Set-Content -Path $IDX -Value $idx -Encoding UTF8
 Write-Host "[OK] Docs updated (no backups): $DocsRoot"
+

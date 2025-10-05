@@ -1,0 +1,107 @@
+entities:
+  - name: ComplianceAudit
+    description: "감사 추적 및 내부통제 기록"
+    properties:
+      - name: audit_id
+        type: string
+      - name: finding_severity
+        type: enum[Low,Medium,High,Critical]
+      - name: reviewer
+        type: string
+      - name: timestamp
+        type: datetime
+      - name: corrective_action
+        type: string
+
+  - name: RegulatoryFiling
+    description: "금융감독원 및 외부 규제기관 보고서 제출 기록"
+    properties:
+      - name: filing_id
+        type: string
+      - name: jurisdiction
+        type: string
+      - name: submission_date
+        type: datetime
+      - name: status
+        type: enum[Draft,Submitted,Approved,Rejected]
+      - name: reviewer
+        type: string
+
+  - name: CustomerComplaint
+    description: "고객 불만 접수 및 해결 내역"
+    properties:
+      - name: complaint_id
+        type: string
+      - name: category
+        type: enum[Execution,Service,Fee,Other]
+      - name: severity
+        type: enum[Low,Medium,High]
+      - name: resolution_status
+        type: enum[Pending,InProgress,Resolved,Escalated]
+      - name: response_time_hours
+        type: number
+        min: 0
+        max: 240
+
+  - name: SignalEvent
+    description: "트레이딩 시그널 발생 이벤트"
+    properties:
+      - name: signal_id
+        type: string
+      - name: confidence_score
+        type: float
+        min: 0
+        max: 1
+      - name: volatility_adjusted
+        type: bool
+      - name: signal_latency_ms
+        type: int
+        min: 0
+        max: 10000
+        unit: "ms"
+      - name: source_reliability
+        type: float
+        min: 0
+        max: 1
+      - name: data_integrity_score
+        type: float
+        min: 0
+        max: 1
+      - name: redundancy_ratio
+        type: float
+        min: 0
+        max: 10
+        unit: "ratio"
+      - name: override_flag
+        type: bool
+      - name: updated_at
+        type: datetime
+
+  - name: Strategy
+    description: "전략 메타데이터 및 실행 파라미터"
+    properties:
+      - name: strategy_id
+        type: string
+      - name: expected_sharpe
+        type: float
+        min: -1
+        max: 5
+      - name: drawdown_limit
+        type: float
+        min: 0
+        max: 1
+      - name: position_sizing_rule
+        type: string
+      - name: risk_budget
+        type: float
+        min: 0
+        max: 1
+      - name: execution_latency_limit
+        type: int
+        min: 0
+        max: 5000
+        unit: "ms"
+      - name: compliance_mode
+        type: enum[Strict,Moderate,Flexible]
+      - name: last_audit_date
+        type: datetime
