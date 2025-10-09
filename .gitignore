@@ -25,4 +25,15 @@ logs/audit/
 
 # Universe tracking exception
 !Universe/
+# === self_heal transient ===
+agents/self_heal/*.bak_*
+agents/self_heal/*.log
+agents/self_heal/*.state
+agents/self_heal/.last_run
+agents/self_heal/runner.state
+agents/self_heal/self_heal.ps1.bak_*
+agents/self_heal/.emit_dedup.json
+agents/self_heal/self_heal_state.json
 
+# === data/cache/logs (필요 시 조정) ===
+data/
