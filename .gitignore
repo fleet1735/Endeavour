@@ -37,3 +37,8 @@ agents/self_heal/self_heal_state.json
 
 # === data/cache/logs (필요 시 조정) ===
 data/
+agents/**/logs/
+agents/**/audit/
+repo_trees/*.txt
+repo_trees/*.bak_*
+
