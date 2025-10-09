@@ -1,5 +1,7 @@
-*.md text eol=lf
-
-*.ps1 text eol=crlf
-*.py text eol=lf
-*.json text eol=lf
+* text=auto
+*.ps1 text eol=lf
+*.psm1 text eol=lf
+*.psd1 text eol=lf
+*.sh  text eol=lf
+*.cmd text eol=crlf
+*.bat text eol=crlf
