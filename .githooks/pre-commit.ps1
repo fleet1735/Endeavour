@@ -1,4 +1,5 @@
-Write-Host "[pre-commit] running..."
+# pre-commit.ps1 — 경량 구문 점검(허용 모드), 항상 0으로 종료
+Write-Host "[pre-commit] PowerShell hook running..."
 $ok = $true
 Get-ChildItem -Recurse -Include *.ps1 | ForEach-Object {
   try {
@@ -10,5 +11,7 @@ Get-ChildItem -Recurse -Include *.ps1 | ForEach-Object {
     $ok = $false
   }
 }
-if (-not $ok) { Write-Host "[pre-commit] WARNING: syntax issues detected (허용 모드)" }
+if (-not $ok) {
+  Write-Host "[pre-commit] WARNING: syntax issues detected (허용 모드)"
+}
 exit 0
