@@ -41,4 +41,9 @@ agents/**/logs/
 agents/**/audit/
 repo_trees/*.txt
 repo_trees/*.bak_*
+agents/**/.cache/
+agents/**/.tmp/
+agents/**/self_heal.ps1.bak_*
+agents/**/.DS_Store
+agents/**/desktop.ini
 
