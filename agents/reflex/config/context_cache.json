@@ -1,0 +1,29 @@
+{
+  "events": [
+    {
+      "detail": "Conversion from JSON failed with error: Additional text encountered after finished reading JSON content: }. Path '', line 12, position 0.",
+      "event": "RECOVERY_INVOCATION",
+      "timestamp": "2025-10-09T01:27:53.9864127+09:00"
+    },
+    {
+      "detail": "D:\\Endeavour_Dev\\data\\rcl_fallback.json",
+      "event": "EOF_FIX",
+      "timestamp": "2025-10-09T01:27:54.0224668+09:00"
+    },
+    {
+      "event": "RECOVERY_INVOCATION",
+      "detail": "Cannot bind argument to parameter 'Path' because it is null.",
+      "timestamp": "2025-10-09T02:07:41.5535456+09:00"
+    },
+    {
+      "event": "RECOVERY_INVOCATION",
+      "detail": "Conversion from JSON failed with error: Additional text encountered after finished reading JSON content: }. Path '', line 12, position 0.",
+      "timestamp": "2025-10-09T02:14:33.2220975+09:00"
+    },
+    {
+      "event": "EOF_FIX",
+      "detail": "D:\\Endeavour_Dev\\data\\rcl_fallback.json",
+      "timestamp": "2025-10-09T02:14:33.2380372+09:00"
+    }
+  ]
+}

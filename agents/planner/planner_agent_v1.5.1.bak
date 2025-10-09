@@ -1,0 +1,31 @@
+# ============================
+# Planner Agent v1.5.1 (Loop)
+# ============================
+
+$busPath = "D:\Endeavour_Dev\agents\reflex\bus\stream\bus_events.jsonl"
+$logPath = "D:\Endeavour_Dev\agents\planner\planner_log.txt"
+
+Write-Host "[Planner Agent v1.5.1] 루프 시작..."
+
+while ($true) {
+    if (Test-Path $busPath) {
+        $lines = Get-Content $busPath -Tail 5 | ForEach-Object {
+            try { $_ | ConvertFrom-Json } catch { $null }
+        }
+
+        foreach ($evt in $lines) {
+            if ($evt.topic -eq "Ontology/State" -and $evt.payload.tag -eq "STATE:DEGRADED") {
+                $action = @{
+                    ts = (Get-Date).ToString("s")
+                    source = "planner"
+                    topic = "Planner/Action"
+                    payload = @{ action = "ACTION: run self_heal.ps1" }
+                }
+                $action | ConvertTo-Json -Compress | Add-Content -Path $busPath
+                Add-Content -Path $logPath -Value "$(Get-Date -Format 'HH:mm:ss') Planner reacted to DEGRADED"
+                Write-Host "✅ Self-heal action 기록됨"
+            }
+        }
+    }
+    Start-Sleep -Seconds 3
+}

@@ -1,0 +1,12 @@
+{
+  "cooldown_minutes": 5,
+  "actions": {
+    "on_eof_spike": "enforce_json_precheck",
+    "on_recovery_spike": "lock_rcl_to_fallback"
+  },
+  "thresholds": {
+    "EOF_FIX": 3,
+    "RECOVERY_INVOCATION": 3
+  },
+  "version": "v1.4.1"
+}
