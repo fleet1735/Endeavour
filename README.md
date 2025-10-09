@@ -36,3 +36,4 @@ data/logs/              # 실행 로그
 reports/data_quality/   # 검증 리포트
 docs/                   # 문서 (IPD, Migration_pack, CHANGE_LOG, 프로젝트청사진 등)
 Archives/               # 일회성 스크립트/보관 자료
+
