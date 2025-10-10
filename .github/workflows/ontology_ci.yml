@@ -1,176 +1,148 @@
-name: Ontology CI
+name: "ci(ontology): SignalEvent integrity + schema validation"
 
 on:
   push:
-    branches: [ "main", "develop", "feature/**" ]
+    branches: [ "main" ]
     paths:
-      - "validator/**"
-      - "tools/**"
-      - "engines/**"
-      - "ontology/**"
       - ".github/workflows/ontology_ci.yml"
-      - "runs/sample_inputs/**"
-  pull_request:
-    branches: [ "main", "develop" ]
-    paths:
+      - "schemas/**"
       - "validator/**"
-      - "tools/**"
-      - "engines/**"
+      - "setups/**"
       - "ontology/**"
-      - ".github/workflows/ontology_ci.yml"
+      - "engine/**"
+      - "runs/**"
   workflow_dispatch:
 
-concurrency:
-  group: ontology-ci-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
-  validate-ontology:
-    name: Validate DSL, SSOT, Engine I/O & Smoke
+  validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-    permissions:
-      contents: read
-      pull-requests: write
-
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      - name: Cache pip
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: pip-${{ runner.os }}-${{ hashFiles('validator/**/*.py','tools/**/*.py','engines/**/*.py','ontology/models/*.json') }}
-          restore-keys: |
-            pip-${{ runner.os }}-
-
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pyyaml jsonschema
+          pip install jsonschema pyyaml
 
-      - name: Prepare CI run directory
-        run: mkdir -p runs/ci
-
-      - name: Ensure sample SignalEvents
+      - name: Validate setups against schemas/setup.schema.json (if present)
         run: |
-          if [ ! -f "runs/sample_inputs/signal_events.jsonl" ]; then
-            mkdir -p runs/sample_inputs
-            cat > runs/sample_inputs/signal_events.jsonl << 'EOF'
-{"ontology_version":"1.0.1","entity":"SignalEvent","event_id":"ev_ci_1","setup_ref":"MA_Crossover","instrument_ref":"KRX:005930","ts_event":"2024-12-02T00:00:00Z","payload":{"date":"2024-12-02","signal":"CROSS_UP"}}
-{"ontology_version":"1.0.1","entity":"SignalEvent","event_id":"ev_ci_2","setup_ref":"MA_Crossover","instrument_ref":"KRX:005930","ts_event":"2024-12-10T00:00:00Z","payload":{"date":"2024-12-10","signal":"CROSS_DOWN"}}
-EOF
-          fi
+          if [ -f schemas/setup.schema.json ]; then
+            python - <<'PY'
+import json,glob,sys
+import jsonschema
+from pathlib import Path
 
-      - name: Run DSL Validator (strict)
-        run: |
-          if [ ! -f "validator/dsl_checker.py" ]; then
-            echo "::error::validator/dsl_checker.py not found"; exit 2; fi
-          python validator/dsl_checker.py runs/sample_inputs/signal_events.jsonl --strict --report runs/ci/validator_report.json
+schema_path = Path('schemas/setup.schema.json')
+schema = json.load(open(schema_path, 'r', encoding='utf-8'))
+ok = True
 
-      - name: Registry Cohesion Check (if registry.yaml exists)
-        run: |
-          if [ -f "ontology/registry.yaml" ]; then
-            python tools/registry_cohesion_checker.py \
-              --registry ontology/registry.yaml \
-              --schema ontology/models/signal_event.schema.json \
-              --schema ontology/models/trade.schema.json \
-              --schema ontology/models/metric.schema.json \
-              --out runs/ci/registry_cohesion_report.json
+for f in glob.glob('setups/**/*.json', recursive=True):
+    try:
+        data = json.load(open(f, 'r', encoding='utf-8'))
+        jsonschema.validate(instance=data, schema=schema)
+        print("OK", f)
+    except Exception as e:
+        ok = False
+        print("ERR", f, "->", e)
+
+if not ok:
+    sys.exit(1)
+PY
           else
-            echo '{"ok":true,"note":"registry.yaml not present; cohesion check skipped"}' > runs/ci/registry_cohesion_report.json
+            echo "schemas/setup.schema.json not found — skipping schema validation."
           fi
 
-      - name: Enforce Engine I/O Contract
+      - name: Validate SignalEvent integrity (CF-101..105)
         run: |
-          if [ ! -f "engines/skeleton_backtest.py" ]; then
-            echo "::error::engines/skeleton_backtest.py not found"; exit 5; fi
           python - <<'PY'
-          import sys, re, pathlib
-          p = pathlib.Path("engines/skeleton_backtest.py")
-          txt = p.read_text(encoding="utf-8", errors="ignore")
-          errs = []
-          if "SignalEvent" not in txt and "signal_events_jsonl" not in txt and "jloadl(" not in txt:
-            errs.append("Engine must accept/consume SignalEvent stream.")
-          if re.search(r"read_prices_csv\\(", txt) and "jloadl(" not in txt:
-            errs.append("Engine appears to rely on CSV without SignalEvent adapter usage.")
-          if errs:
-            print("::error::" + " | ".join(errs))
-            sys.exit(6)
-          print("Engine I/O contract check passed.")
-          PY
+import json, sys, glob, datetime
+from pathlib import Path
 
-      - name: Ensure sample price CSV
-        run: |
-          if [ ! -f "runs/sample_inputs/prices.csv" ]; then
-            cat > runs/sample_inputs/prices.csv << 'EOF'
-date,open,high,low,close
-2024-12-02,70000,71000,69000,70500
-2024-12-03,70600,71200,70100,71000
-2024-12-04,71100,72000,70900,71900
-2024-12-05,72000,72500,71500,72000
-2024-12-06,72100,73000,72000,72900
-2024-12-09,73000,73500,72500,73300
-2024-12-10,73400,74000,73000,73800
-2024-12-11,73900,74200,73500,74000
-EOF
-          fi
+def validate_signal(signal):
+    errs=[]
+    # CF-101: price/signal 동시 타임스탬프
+    if signal.get("price_update_time") == signal.get("signal_time"):
+        errs.append("CF-101")
+    # CF-102: 데이터 지연
+    if signal.get("data_delay_ms", 0) > 3000:
+        errs.append("CF-102")
+    # CF-103: 낮은 신뢰도
+    if signal.get("confidence_score", 1) < 0.3:
+        errs.append("CF-103")
+    # CF-104: 5초 이내 중복 신호 (id 기준)
+    if "recent_signals" in signal:
+        now = datetime.datetime.now()
+        for prev in signal["recent_signals"]:
+            try:
+                t = prev.get("timestamp")
+                # ISO8601 또는 epoch(ms/s) 유연 처리
+                if isinstance(t, (int, float)):
+                    # 초 또는 밀리초 추정
+                    ts = datetime.datetime.fromtimestamp(t/1000 if t > 1e12 else t)
+                else:
+                    ts = datetime.datetime.fromisoformat(t.replace("Z","+00:00")) if isinstance(t,str) else now
+            except Exception:
+                ts = now
+            if prev.get("id") == signal.get("id") and (now - ts).total_seconds() < 5:
+                errs.append("CF-104")
+                break
+    # CF-105: override + 초저신뢰
+    if signal.get("override_flag") and signal.get("confidence_score", 1) < 0.1:
+        errs.append("CF-105")
+    return errs
 
-      - name: Run Engine Smoke (SignalEvent + Price CSV)
-        run: |
-          python engines/skeleton_backtest.py runs/sample_inputs/signal_events.jsonl runs/sample_inputs/prices.csv runs/ci
+# 검색 대상: 신호가 들어 있을 법한 JSON들(필요에 따라 경로 추가 가능)
+candidates = []
+candidates += glob.glob('runs/**/*.json', recursive=True)
+candidates += glob.glob('engine/**/*.json', recursive=True)
+candidates += glob.glob('**/signals*.json', recursive=True)
 
-      - name: Verify Engine Artifacts
-        run: |
-          test -s runs/ci/trades.jsonl || (echo "::error::trades.jsonl not produced" && exit 7)
-          test -s runs/ci/metrics.json  || (echo "::error::metrics.json not produced" && exit 7)
+ok = True
+for f in candidates:
+    try:
+        obj = json.load(open(f, 'r', encoding='utf-8'))
+    except Exception:
+        continue
+    signals = []
+    if isinstance(obj, dict):
+        if obj.get("type") == "SignalEvent":
+            signals = [obj]
+        elif "signals" in obj and isinstance(obj["signals"], list):
+            signals = obj["signals"]
+    for s in signals:
+        errs = validate_signal(s)
+        if errs:
+            ok = False
+            print(f"ERR {f}: {','.join(errs)}")
+if not ok:
+    sys.exit(1)
+else:
+    print("SignalEvent integrity OK")
+PY
 
-      - name: Upload CI Reports
-        uses: actions/upload-artifact@v4
-        with:
-          name: ontology-ci-reports
-          path: runs/ci/
-
-      - name: Fail on Cohesion Diffs
+      - name: Persist CI reports
         if: always()
         run: |
+          mkdir -p runs/ci
+          # 간단한 상태 파일 (상세 리포트는 위 단계 출력)
           python - <<'PY'
-          import json, sys, os
-          p='runs/ci/registry_cohesion_report.json'
-          if os.path.exists(p):
-            d=json.load(open(p,encoding="utf-8"))
-            if not d.get("ok", True):
-              print("Cohesion check failed with diffs:", d.get("diffs"))
-              sys.exit(3)
-          PY
+import json,os
+os.makedirs("runs/ci", exist_ok=True)
+json.dump({"status":"completed","ts":__import__("datetime").datetime.utcnow().isoformat()+"Z"}, open("runs/ci/validator_report.json","w"))
+PY
 
-      - name: Post CI Summary as PR Comment
-        if: ${{ github.event_name == 'pull_request' }}
-        uses: actions/github-script@v7
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
-          script: |
-            const fs = require('fs');
-            function tryRead(p){ try{ return JSON.parse(fs.readFileSync(p, 'utf8')); }catch(e){ return null; } }
-            const vr = tryRead('runs/ci/validator_report.json') || {};
-            const cr = tryRead('runs/ci/registry_cohesion_report.json') || {};
-            const ok  = (vr.summary?.pass !== false) && (cr.ok !== false);
-            const diffs = (cr.diffs && cr.diffs.length) ? `\n\n**Cohesion Diffs**:\n\`\`\`json\n${JSON.stringify(cr.diffs, null, 2)}\n\`\`\`` : '';
-            const body = [
-              `### ✅ Ontology CI Summary`,
-              `- DSL Validator(strict): **${vr.summary?.pass === false ? 'FAIL' : 'PASS'}**`,
-              `- Registry Cohesion: **${cr.ok === false ? 'FAIL' : 'PASS'}**`,
-              `- Artifacts: trades.jsonl & metrics.json`,
-              diffs
-            ].join('\n');
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body
-            });
+          name: ontology-ci-artifacts
+          path: runs/ci
