@@ -1,4 +1,4 @@
-name: "ci(ontology): SignalEvent integrity + schema validation"
+name: "ci(ontology): minimal schema + SignalEvent checks"
 
 on:
   push:
@@ -20,13 +20,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
       - name: Install dependencies
         run: |
@@ -34,20 +32,21 @@ jobs:
           pip install jsonschema pyyaml
 
       - name: Validate setups against schemas/setup.schema.json (if present)
+        shell: bash
         run: |
           if [ -f schemas/setup.schema.json ]; then
             python - <<'PY'
-import json,glob,sys
+import json, glob, sys
 import jsonschema
 from pathlib import Path
 
-schema_path = Path('schemas/setup.schema.json')
-schema = json.load(open(schema_path, 'r', encoding='utf-8'))
+schema_path = Path("schemas/setup.schema.json")
+schema = json.load(open(schema_path, "r", encoding="utf-8"))
 ok = True
 
-for f in glob.glob('setups/**/*.json', recursive=True):
+for f in glob.glob("setups/**/*.json", recursive=True):
     try:
-        data = json.load(open(f, 'r', encoding='utf-8'))
+        data = json.load(open(f, "r", encoding="utf-8"))
         jsonschema.validate(instance=data, schema=schema)
         print("OK", f)
     except Exception as e:
@@ -57,11 +56,10 @@ for f in glob.glob('setups/**/*.json', recursive=True):
 if not ok:
     sys.exit(1)
 PY
-          else
-            echo "schemas/setup.schema.json not found — skipping schema validation."
           fi
 
       - name: Validate SignalEvent integrity (CF-101..105)
+        shell: bash
         run: |
           python - <<'PY'
 import json, sys, glob, datetime
@@ -69,60 +67,55 @@ from pathlib import Path
 
 def validate_signal(signal):
     errs=[]
-    # CF-101: price/signal 동시 타임스탬프
     if signal.get("price_update_time") == signal.get("signal_time"):
         errs.append("CF-101")
-    # CF-102: 데이터 지연
     if signal.get("data_delay_ms", 0) > 3000:
         errs.append("CF-102")
-    # CF-103: 낮은 신뢰도
     if signal.get("confidence_score", 1) < 0.3:
         errs.append("CF-103")
-    # CF-104: 5초 이내 중복 신호 (id 기준)
     if "recent_signals" in signal:
-        now = datetime.datetime.now()
+        now = datetime.datetime.now(datetime.timezone.utc)
         for prev in signal["recent_signals"]:
             try:
                 t = prev.get("timestamp")
-                # ISO8601 또는 epoch(ms/s) 유연 처리
                 if isinstance(t, (int, float)):
-                    # 초 또는 밀리초 추정
-                    ts = datetime.datetime.fromtimestamp(t/1000 if t > 1e12 else t)
+                    ts = datetime.datetime.fromtimestamp(t/1000 if t > 1e12 else t, tz=datetime.timezone.utc)
+                elif isinstance(t, str):
+                    ts = datetime.datetime.fromisoformat(t.replace("Z","+00:00"))
                 else:
-                    ts = datetime.datetime.fromisoformat(t.replace("Z","+00:00")) if isinstance(t,str) else now
+                    continue
             except Exception:
-                ts = now
+                continue
             if prev.get("id") == signal.get("id") and (now - ts).total_seconds() < 5:
                 errs.append("CF-104")
                 break
-    # CF-105: override + 초저신뢰
     if signal.get("override_flag") and signal.get("confidence_score", 1) < 0.1:
         errs.append("CF-105")
     return errs
 
-# 검색 대상: 신호가 들어 있을 법한 JSON들(필요에 따라 경로 추가 가능)
 candidates = []
-candidates += glob.glob('runs/**/*.json', recursive=True)
-candidates += glob.glob('engine/**/*.json', recursive=True)
-candidates += glob.glob('**/signals*.json', recursive=True)
+candidates += glob.glob("runs/**/*.json", recursive=True)
+candidates += glob.glob("engine/**/*.json", recursive=True)
+candidates += glob.glob("**/signals*.json", recursive=True)
 
 ok = True
 for f in candidates:
     try:
-        obj = json.load(open(f, 'r', encoding='utf-8'))
+        obj = json.load(open(f, "r", encoding="utf-8"))
     except Exception:
         continue
     signals = []
     if isinstance(obj, dict):
         if obj.get("type") == "SignalEvent":
             signals = [obj]
-        elif "signals" in obj and isinstance(obj["signals"], list):
+        elif isinstance(obj.get("signals"), list):
             signals = obj["signals"]
     for s in signals:
         errs = validate_signal(s)
         if errs:
             ok = False
             print(f"ERR {f}: {','.join(errs)}")
+
 if not ok:
     sys.exit(1)
 else:
@@ -133,11 +126,10 @@ PY
         if: always()
         run: |
           mkdir -p runs/ci
-          # 간단한 상태 파일 (상세 리포트는 위 단계 출력)
           python - <<'PY'
-import json,os
+import json, os, datetime
 os.makedirs("runs/ci", exist_ok=True)
-json.dump({"status":"completed","ts":__import__("datetime").datetime.utcnow().isoformat()+"Z"}, open("runs/ci/validator_report.json","w"))
+json.dump({"status":"completed","ts":datetime.datetime.utcnow().isoformat()+"Z"}, open("runs/ci/validator_report.json","w"))
 PY
 
       - name: Upload artifacts
