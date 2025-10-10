@@ -105,3 +105,10 @@ entities:
 
   - name: Role
     props: [role_id, name]
+  - name: ReflexRule
+    props:
+      - { name: rule_id,         type: string }
+      - { name: source,          type: string, enum: [signal_error, latency, pattern_learning, manual_override] }
+      - { name: trigger,         type: object }
+      - { name: action,          type: object }
+      - { name: confidence_min,  type: number, minimum: 0, maximum: 1 }
