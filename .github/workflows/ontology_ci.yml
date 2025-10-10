@@ -1,0 +1,97 @@
+name: Ontology CI
+
+on:
+  push:
+    branches: [ "main", "develop", "feature/**" ]
+  pull_request:
+    branches: [ "main", "develop" ]
+  workflow_dispatch:
+
+jobs:
+  validate-ontology:
+    name: Validate DSL & SSOT & Enforce Ontology-First
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyyaml jsonschema
+
+      - name: Prepare CI run directory
+        run: mkdir -p runs/ci
+
+      # ---- DoD-2.1: DSL 무결성(CF-101~105) 엄격 검증 ----
+      - name: Run DSL Validator (strict)
+        run: |
+          if [ ! -f "validator/dsl_checker.py" ]; then
+            echo "::error::validator/dsl_checker.py not found"; exit 2; fi
+          if [ ! -f "runs/sample_inputs/signal_events.jsonl" ]; then
+            echo "::warning::sample SignalEvent stream missing; create a sample to exercise validator"; fi
+          python validator/dsl_checker.py runs/sample_inputs/signal_events.jsonl --strict --report runs/ci/validator_report.json
+
+      # ---- SSOT 결속 검사: registry.yaml ↔ schema 동형성 ----
+      - name: Registry Cohesion Check (if registry.yaml exists)
+        run: |
+          if [ -f "ontology/registry.yaml" ]; then
+            python tools/registry_cohesion_checker.py \
+              --registry ontology/registry.yaml \
+              --schema ontology/models/signal_event.schema.json \
+              --schema ontology/models/trade.schema.json \
+              --schema ontology/models/metric.schema.json \
+              --out runs/ci/registry_cohesion_report.json
+          else
+            echo '{"ok":true,"note":"registry.yaml not present; cohesion check skipped"}' > runs/ci/registry_cohesion_report.json
+          fi
+
+      # ---- Ontology-First 계약 강제: 엔진은 SignalEventStream+DataSnapshot만 소비 ----
+      - name: Enforce Ontology-First Engine I/O Contract
+        run: |
+          if [ ! -f "engines/skeleton_backtest.py" ]; then
+            echo "::error::engines/skeleton_backtest.py not found"; exit 5; fi
+          python - <<'PY'
+          import sys, re, json, pathlib
+          p = pathlib.Path("engines/skeleton_backtest.py")
+          txt = p.read_text(encoding="utf-8", errors="ignore")
+          errs = []
+          # 엔진은 SignalEvent 스트림 인자를 받아야 함(명시적 파라미터 또는 변수 흔적 검사)
+          if "signal_events_jsonl" not in txt and "SignalEvent" not in txt:
+            errs.append("Engine must accept/consume SignalEvent stream (argument or explicit usage).")
+          # CSV 단독 경로를 유일 입력으로 사용하는 흔적이 있으면 경고(마이그레이션 어댑터 제외)
+          if re.search(r"read_prices_csv\\(", txt) and "jloadl(" not in txt:
+            errs.append("Engine appears to rely on CSV without SignalEvent adapter usage.")
+          if errs:
+            print("::error::" + " | ".join(errs))
+            sys.exit(6)
+          print("Engine I/O contract check passed.")
+          PY
+
+      # ---- 리포트 업로드 ----
+      - name: Upload CI Reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: ontology-ci-reports
+          path: runs/ci/
+
+      # ---- Cohesion 불일치 시 실패 처리 (ExitCode=3) ----
+      - name: Fail on Cohesion Diffs
+        if: always()
+        run: |
+          python - <<'PY'
+          import json, sys, os
+          p='runs/ci/registry_cohesion_report.json'
+          if os.path.exists(p):
+            d=json.load(open(p,encoding="utf-8"))
+            if not d.get("ok", True):
+              print("Cohesion check failed with diffs:", d.get("diffs"))
+              sys.exit(3)
+          PY
