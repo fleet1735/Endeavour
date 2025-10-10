@@ -1,0 +1,14 @@
+[
+  {
+    "id": "FUNC_PARAM_MISSING_001",
+    "description": "함수 매개변수 변수명 누락 + 괄호 오류",
+    "pattern": "Missing '\\)' in function parameter list",
+    "edits": [
+      { "type": "regex_replace", "find": "\\[string\\]\\s*,\\s*\\)", "replace": "[string]$arg1)" },
+      { "type": "regex_replace", "find": "\\[string\\]\\s*,",        "replace": "[string]$arg1"  },
+      { "type": "regex_replace", "find": "\\[string\\]\\s*\\)\\)",   "replace": "[string]$arg1)" }
+    ],
+    "enabled": true,
+    "confidence": 0.95
+  }
+]

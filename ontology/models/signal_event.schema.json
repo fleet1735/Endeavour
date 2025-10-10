@@ -1,0 +1,23 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SignalEvent",
+  "type": "object",
+  "required": ["ontology_version","entity","event_id","setup_ref","instrument_ref","ts_event","payload"],
+  "properties": {
+    "ontology_version": { "type": "string", "enum": ["1.0.1"] },
+    "entity": { "type": "string", "const": "SignalEvent" },
+    "event_id": { "type": "string" },
+    "setup_ref": { "type": "string" },
+    "instrument_ref": { "type": "string" },
+    "universe_ref": { "type": "string" },
+    "calendar_ref": { "type": "string" },
+    "ts_event": { "type": "string", "format": "date-time" },
+    "ts_signal": { "type": "string", "format": "date-time" },
+    "payload": { "type": "object" },
+    "hash": { "type": "string" },
+    "source": { "type": "string" },
+    "version": { "type": "integer", "minimum": 1 },
+    "links": { "type": "object" }
+  },
+  "additionalProperties": false
+}

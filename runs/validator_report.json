@@ -1,0 +1,44 @@
+{
+  "summary": {
+    "ontology_version": "1.0.1",
+    "checked": [
+      "CF-101",
+      "CF-102",
+      "CF-103",
+      "CF-104",
+      "CF-105"
+    ],
+    "strict": true,
+    "ts": "2025-10-10T19:06:31.554136Z",
+    "counts": {
+      "CF-101": 0,
+      "CF-102": 0,
+      "CF-103": 0,
+      "CF-104": 0,
+      "CF-105": 0
+    },
+    "pass": true
+  },
+  "details": {
+    "CF-101": {
+      "dup_event_ids": [],
+      "count": 0
+    },
+    "CF-102": {
+      "violations": [],
+      "count": 0
+    },
+    "CF-103": {
+      "disorder": [],
+      "count": 0
+    },
+    "CF-104": {
+      "dup_content_events": [],
+      "count": 0
+    },
+    "CF-105": {
+      "missing_refs": [],
+      "count": 0
+    }
+  }
+}

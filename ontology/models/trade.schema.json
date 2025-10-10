@@ -1,0 +1,21 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Trade",
+  "type": "object",
+  "required": ["ontology_version","entity","trade_id","run_id","side","qty","price","ts_exec","signal_event_ref"],
+  "properties": {
+    "ontology_version": { "type": "string", "enum": ["1.0.1"] },
+    "entity": { "type": "string", "const": "Trade" },
+    "trade_id": { "type": "string" },
+    "run_id": { "type": "string" },
+    "position_id": { "type": "string" },
+    "side": { "type": "string", "enum": ["BUY","SELL"] },
+    "qty": { "type": "number" },
+    "price": { "type": "number" },
+    "ts_exec": { "type": "string", "format": "date-time" },
+    "signal_event_ref": { "type": "string" },
+    "fees": { "type": "number" },
+    "tags": { "type": "array", "items": { "type": "string" } }
+  },
+  "additionalProperties": false
+}

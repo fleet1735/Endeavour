@@ -1,0 +1,28 @@
+
+FullName                                                                    Length LastWriteTime
+--------                                                                    ------ -------------
+D:\Endeavour_Dev\agents\reflex\auto_reflex_engine.ps1                         5984 2025-10-09 오전 1:27:53
+D:\Endeavour_Dev\agents\reflex\bus                                                 2025-10-09 오전 3:12:53
+D:\Endeavour_Dev\agents\reflex\bus\emit_event.ps1                              255 2025-10-09 오전 3:12:53
+D:\Endeavour_Dev\agents\reflex\bus\event_bus.ps1                               149 2025-10-09 오전 3:12:53
+D:\Endeavour_Dev\agents\reflex\bus\stream                                          2025-10-09 오전 2:48:07
+D:\Endeavour_Dev\agents\reflex\bus\stream\bus_events.jsonl                 6238039 2025-10-10 오전 2:53:03
+D:\Endeavour_Dev\agents\reflex\config                                              2025-10-09 오전 2:14:32
+D:\Endeavour_Dev\agents\reflex\config\context_cache.json                      1074 2025-10-09 오전 2:14:33
+D:\Endeavour_Dev\agents\reflex\config\recommendations.txt                      223 2025-10-09 오전 2:14:33
+D:\Endeavour_Dev\agents\reflex\config\self_heal_state.json                     101 2025-10-09 오전 2:14:32
+D:\Endeavour_Dev\agents\reflex\config\self_heal.json                           246 2025-10-09 오전 2:14:32
+D:\Endeavour_Dev\agents\reflex\context_analyzer.ps1                           2334 2025-10-09 오전 1:53:10
+D:\Endeavour_Dev\agents\reflex\init_reflex_dirs.ps1                           1123 2025-10-09 오전 2:34:32
+D:\Endeavour_Dev\agents\reflex\log_rotation.ps1                               1343 2025-10-09 오전 1:04:00
+D:\Endeavour_Dev\agents\reflex\logs                                                2025-10-10 오전 2:21:18
+D:\Endeavour_Dev\agents\reflex\logs\daily_insight_20251009.log                 843 2025-10-09 오전 2:14:33
+D:\Endeavour_Dev\agents\reflex\logs\engine_ops_20251009.log                   1207 2025-10-09 오전 2:14:33
+D:\Endeavour_Dev\agents\reflex\logs\engine_ops_20251010.log                    555 2025-10-10 오전 2:53:03
+D:\Endeavour_Dev\agents\reflex\logs\engine_ops.log                          383764 2025-10-09 오후 8:00:03
+D:\Endeavour_Dev\agents\reflex\logs\errors                                         2025-10-08 오후 7:59:32
+D:\Endeavour_Dev\agents\reflex\logs\errors\health_test_20251010_030816.txt      23 2025-10-10 오전 3:08:16
+D:\Endeavour_Dev\agents\reflex\logs\recovery_history.log                       727 2025-10-09 오전 2:14:33
+D:\Endeavour_Dev\agents\reflex\reflex_healthcheck.ps1                         1062 2025-10-10 오전 3:08:15
+D:\Endeavour_Dev\agents\reflex\test_auto_recovery.ps1                         1505 2025-10-09 오전 1:04:00
+

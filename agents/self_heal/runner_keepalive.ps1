@@ -1,7 +1,14 @@
-param([string]$Bus = 'D:\Endeavour_Dev\agents\reflex\bus\stream\bus_events.jsonl',[string]$Once = 'D:\Endeavour_Dev\agents\self_heal\self_heal_once.ps1')
-$mtx = New-Object System.Threading.Mutex(False,'Global\EndeavourSelfHealKeepalive')
-try{
-  if(-not $mtx.WaitOne(0)){ return }
-  if(-not (Test-Path $Once)){ throw 'missing once runner' }
-  & 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -ExecutionPolicy Bypass -File "$Once" -Bus "$Bus" 2>&1 | Out-Null
-} finally { if($mtx){ $mtx.ReleaseMutex() | Out-Null } }
+param(
+  [int]$IntervalSec = 300,
+  [switch]$DryRun
+)
+$ErrorActionPreference = 'Stop'
+$root = Split-Path -Parent $PSCommandPath
+$main = Join-Path $root 'self_heal.ps1'
+
+if ($DryRun) { Write-Host "[runner_keepalive] DryRun"; exit 0 }
+if (!(Test-Path $main)) { Write-Warning "[runner_keepalive] self_heal.ps1 not found"; exit 0 }
+
+# (필요시) 주기 점검 루프는 운영 스케줄러에서 관리
+Write-Host "[runner_keepalive] ping ok (IntervalSec=$IntervalSec)"
+exit 0

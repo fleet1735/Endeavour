@@ -1,0 +1,2 @@
+{"ontology_version": "1.0.1", "entity": "Trade", "trade_id": "7e01c3af9583421aa915c4accb83565d", "run_id": "run_20251010_190632_6be709", "side": "BUY", "qty": 1.0, "price": 70600.0, "ts_exec": "2024-12-03T00:00:00Z", "signal_event_ref": "ev1"}
+{"ontology_version": "1.0.1", "entity": "Trade", "trade_id": "ded7e863bd7f47f1b683a6ba1c752425", "run_id": "run_20251010_190632_6be709", "side": "SELL", "qty": 1.0, "price": 73900.0, "ts_exec": "2024-12-11T00:00:00Z", "signal_event_ref": "ev2"}

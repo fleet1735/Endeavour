@@ -1,0 +1,27 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "MetricSummary",
+  "type": "object",
+  "required": ["ontology_version","entity","run_id","totals"],
+  "properties": {
+    "ontology_version": { "type": "string", "enum": ["1.0.1"] },
+    "entity": { "type": "string", "const": "MetricSummary" },
+    "run_id": { "type": "string" },
+    "setup_ref": { "type": "string" },
+    "engine_version": { "type": "string" },
+    "totals": {
+      "type": "object",
+      "required": ["pnl","mdd","hit_ratio"],
+      "properties": {
+        "pnl": { "type": "number" },
+        "mdd": { "type": "number" },
+        "hit_ratio": { "type": "number" },
+        "sharpe": { "type": "number" },
+        "turnover": { "type": "number" },
+        "exposure": { "type": "number" }
+      }
+    },
+    "hashes": { "type": "object" }
+  },
+  "additionalProperties": false
+}

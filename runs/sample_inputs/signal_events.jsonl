@@ -1,0 +1,2 @@
+{"ontology_version":"1.0.1","entity":"SignalEvent","event_id":"ev1","setup_ref":"MA_Crossover","instrument_ref":"KRX:005930","ts_event":"2024-12-02T00:00:00Z","payload":{"date":"2024-12-02","signal":"CROSS_UP"}}
+{"ontology_version":"1.0.1","entity":"SignalEvent","event_id":"ev2","setup_ref":"MA_Crossover","instrument_ref":"KRX:005930","ts_event":"2024-12-10T00:00:00Z","payload":{"date":"2024-12-10","signal":"CROSS_DOWN"}}
