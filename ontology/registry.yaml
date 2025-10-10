@@ -1,0 +1,107 @@
+# ontology/registry.yaml — OMVI-1 (Final, SSOT)
+version: 0.1.1
+entities:
+  - name: Instrument
+    props: [ticker, exchange, sector]
+
+  - name: InstrumentSet
+    props:
+      - name: name
+        type: string
+      - name: members
+        type: array
+        items:
+          type: ref
+          ref: Instrument
+
+  - name: PriceBar
+    props: [date, open, high, low, close, volume]
+
+  - name: IndicatorSeries
+    props:
+      - { name: name,    type: string }
+      - { name: params,  type: object }
+      - { name: values_ref, type: string, format: "uri|path" }
+
+  - name: Setup
+    props:
+      - { name: id,        type: string }
+      - { name: version,   type: string }
+      - { name: dsl_json,  type: object }
+      - { name: params,    type: object }
+      - { name: tags,      type: array, items: { type: string } }
+      - { name: created_by, type: ref, ref: User }
+      - { name: created_at, type: datetime }
+
+  - name: SignalEvent
+    props:
+      - { name: id,         type: string }
+      - { name: instrument, type: ref, ref: Instrument }
+      - { name: ts,         type: datetime }
+      - { name: side,       type: string, enum: [BUY, SELL] }
+      - { name: confidence, type: number, minimum: 0.0, maximum: 1.0 }
+      - { name: price_update_time, type: datetime }
+      - { name: signal_time,       type: datetime }
+      - { name: data_delay_ms,     type: int, minimum: 0, maximum: 5000 }
+      - name: recent_signals
+        type: array
+        items:
+          type: object
+          required: [id, timestamp]
+          properties:
+            id:        { type: string }
+            timestamp: { type: datetime }
+
+  - name: BacktestRun
+    props:
+      - { name: id,           type: string }
+      - { name: setup_id,     type: ref, ref: Setup }
+      - { name: dataset_id,   type: ref, ref: Dataset }
+      - { name: universe_id,  type: ref, ref: InstrumentSet }
+      - { name: start,        type: date }
+      - { name: end,          type: date }
+      - { name: engine_version, type: string }
+      - { name: param_hash,   type: string }
+      - { name: data_hash,    type: string }
+      - { name: seed,         type: int }
+      - { name: created_at,   type: datetime }
+
+  - name: Trade
+    props:
+      - { name: run_id,     type: ref, ref: BacktestRun }
+      - { name: instrument, type: ref, ref: Instrument }
+      - { name: ts_in,      type: datetime }
+      - { name: px_in,      type: number }
+      - { name: ts_out,     type: datetime }
+      - { name: px_out,     type: number }
+      - { name: pnl,        type: number }
+      - { name: holding_days, type: int }
+
+  - name: EquityCurve
+    props:
+      - { name: run_id,     type: ref, ref: BacktestRun }
+      - { name: series_ref, type: string, format: "uri|path" }
+
+  - name: Metric
+    props:
+      - { name: run_id,  type: ref, ref: BacktestRun }
+      - { name: sharpe,  type: number }
+      - { name: mdd,     type: number }
+      - { name: cagr,    type: number }
+      - { name: vol,     type: number }
+      - { name: winrate, type: number }
+      - { name: profit_factor, type: number }
+      - { name: yearly_breakdown_ref, type: string, format: "uri|path" }
+
+  - name: Dataset
+    props:
+      - { name: id,          type: string }
+      - { name: snapshot_at, type: datetime }
+      - { name: storage_ref, type: string, format: "uri|path" }
+      - { name: hash,        type: string }
+
+  - name: User
+    props: [user_id, name]
+
+  - name: Role
+    props: [role_id, name]
