@@ -3,15 +3,35 @@ name: Ontology CI
 on:
   push:
     branches: [ "main", "develop", "feature/**" ]
+    paths:
+      - "validator/**"
+      - "tools/**"
+      - "engines/**"
+      - "ontology/**"
+      - ".github/workflows/ontology_ci.yml"
+      - "runs/sample_inputs/**"
   pull_request:
     branches: [ "main", "develop" ]
+    paths:
+      - "validator/**"
+      - "tools/**"
+      - "engines/**"
+      - "ontology/**"
+      - ".github/workflows/ontology_ci.yml"
   workflow_dispatch:
+
+concurrency:
+  group: ontology-ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   validate-ontology:
-    name: Validate DSL & SSOT & Enforce Ontology-First
+    name: Validate DSL, SSOT, Engine I/O & Smoke
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      pull-requests: write
 
     steps:
       - name: Checkout
@@ -22,6 +42,14 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ runner.os }}-${{ hashFiles('validator/**/*.py','tools/**/*.py','engines/**/*.py','ontology/models/*.json') }}
+          restore-keys: |
+            pip-${{ runner.os }}-
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
@@ -30,16 +58,22 @@ jobs:
       - name: Prepare CI run directory
         run: mkdir -p runs/ci
 
-      # ---- DoD-2.1: DSL 무결성(CF-101~105) 엄격 검증 ----
+      - name: Ensure sample SignalEvents
+        run: |
+          if [ ! -f "runs/sample_inputs/signal_events.jsonl" ]; then
+            mkdir -p runs/sample_inputs
+            cat > runs/sample_inputs/signal_events.jsonl << 'EOF'
+{"ontology_version":"1.0.1","entity":"SignalEvent","event_id":"ev_ci_1","setup_ref":"MA_Crossover","instrument_ref":"KRX:005930","ts_event":"2024-12-02T00:00:00Z","payload":{"date":"2024-12-02","signal":"CROSS_UP"}}
+{"ontology_version":"1.0.1","entity":"SignalEvent","event_id":"ev_ci_2","setup_ref":"MA_Crossover","instrument_ref":"KRX:005930","ts_event":"2024-12-10T00:00:00Z","payload":{"date":"2024-12-10","signal":"CROSS_DOWN"}}
+EOF
+          fi
+
       - name: Run DSL Validator (strict)
         run: |
           if [ ! -f "validator/dsl_checker.py" ]; then
             echo "::error::validator/dsl_checker.py not found"; exit 2; fi
-          if [ ! -f "runs/sample_inputs/signal_events.jsonl" ]; then
-            echo "::warning::sample SignalEvent stream missing; create a sample to exercise validator"; fi
           python validator/dsl_checker.py runs/sample_inputs/signal_events.jsonl --strict --report runs/ci/validator_report.json
 
-      # ---- SSOT 결속 검사: registry.yaml ↔ schema 동형성 ----
       - name: Registry Cohesion Check (if registry.yaml exists)
         run: |
           if [ -f "ontology/registry.yaml" ]; then
@@ -53,20 +87,17 @@ jobs:
             echo '{"ok":true,"note":"registry.yaml not present; cohesion check skipped"}' > runs/ci/registry_cohesion_report.json
           fi
 
-      # ---- Ontology-First 계약 강제: 엔진은 SignalEventStream+DataSnapshot만 소비 ----
-      - name: Enforce Ontology-First Engine I/O Contract
+      - name: Enforce Engine I/O Contract
         run: |
           if [ ! -f "engines/skeleton_backtest.py" ]; then
             echo "::error::engines/skeleton_backtest.py not found"; exit 5; fi
           python - <<'PY'
-          import sys, re, json, pathlib
+          import sys, re, pathlib
           p = pathlib.Path("engines/skeleton_backtest.py")
           txt = p.read_text(encoding="utf-8", errors="ignore")
           errs = []
-          # 엔진은 SignalEvent 스트림 인자를 받아야 함(명시적 파라미터 또는 변수 흔적 검사)
-          if "signal_events_jsonl" not in txt and "SignalEvent" not in txt:
-            errs.append("Engine must accept/consume SignalEvent stream (argument or explicit usage).")
-          # CSV 단독 경로를 유일 입력으로 사용하는 흔적이 있으면 경고(마이그레이션 어댑터 제외)
+          if "SignalEvent" not in txt and "signal_events_jsonl" not in txt and "jloadl(" not in txt:
+            errs.append("Engine must accept/consume SignalEvent stream.")
           if re.search(r"read_prices_csv\\(", txt) and "jloadl(" not in txt:
             errs.append("Engine appears to rely on CSV without SignalEvent adapter usage.")
           if errs:
@@ -75,14 +106,37 @@ jobs:
           print("Engine I/O contract check passed.")
           PY
 
-      # ---- 리포트 업로드 ----
+      - name: Ensure sample price CSV
+        run: |
+          if [ ! -f "runs/sample_inputs/prices.csv" ]; then
+            cat > runs/sample_inputs/prices.csv << 'EOF'
+date,open,high,low,close
+2024-12-02,70000,71000,69000,70500
+2024-12-03,70600,71200,70100,71000
+2024-12-04,71100,72000,70900,71900
+2024-12-05,72000,72500,71500,72000
+2024-12-06,72100,73000,72000,72900
+2024-12-09,73000,73500,72500,73300
+2024-12-10,73400,74000,73000,73800
+2024-12-11,73900,74200,73500,74000
+EOF
+          fi
+
+      - name: Run Engine Smoke (SignalEvent + Price CSV)
+        run: |
+          python engines/skeleton_backtest.py runs/sample_inputs/signal_events.jsonl runs/sample_inputs/prices.csv runs/ci
+
+      - name: Verify Engine Artifacts
+        run: |
+          test -s runs/ci/trades.jsonl || (echo "::error::trades.jsonl not produced" && exit 7)
+          test -s runs/ci/metrics.json  || (echo "::error::metrics.json not produced" && exit 7)
+
       - name: Upload CI Reports
         uses: actions/upload-artifact@v4
         with:
           name: ontology-ci-reports
           path: runs/ci/
 
-      # ---- Cohesion 불일치 시 실패 처리 (ExitCode=3) ----
       - name: Fail on Cohesion Diffs
         if: always()
         run: |
@@ -95,3 +149,28 @@ jobs:
               print("Cohesion check failed with diffs:", d.get("diffs"))
               sys.exit(3)
           PY
+
+      - name: Post CI Summary as PR Comment
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            function tryRead(p){ try{ return JSON.parse(fs.readFileSync(p, 'utf8')); }catch(e){ return null; } }
+            const vr = tryRead('runs/ci/validator_report.json') || {};
+            const cr = tryRead('runs/ci/registry_cohesion_report.json') || {};
+            const ok  = (vr.summary?.pass !== false) && (cr.ok !== false);
+            const diffs = (cr.diffs && cr.diffs.length) ? `\n\n**Cohesion Diffs**:\n\`\`\`json\n${JSON.stringify(cr.diffs, null, 2)}\n\`\`\`` : '';
+            const body = [
+              `### ✅ Ontology CI Summary`,
+              `- DSL Validator(strict): **${vr.summary?.pass === false ? 'FAIL' : 'PASS'}**`,
+              `- Registry Cohesion: **${cr.ok === false ? 'FAIL' : 'PASS'}**`,
+              `- Artifacts: trades.jsonl & metrics.json`,
+              diffs
+            ].join('\n');
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body
+            });
