@@ -1,14 +1,142 @@
-name: "ci(ontology): parser-smoke"
+name: "ci(ontology): schema + SignalEvent integrity (CF-101..105)"
+
 on:
   push:
     branches: [ "main" ]
     paths:
       - ".github/workflows/ontology_ci.yml"
+      - "schemas/**"
+      - "validator/**"
+      - "setups/**"
+      - "ontology/**"
+      - "engine/**"
+      - "runs/**"
   workflow_dispatch:
 
 jobs:
-  smoke:
+  validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - name: Echo
-        run: echo "workflow parser OK"
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          pip install jsonschema pyyaml
+
+      - name: Validate setups against schemas/setup.schema.json (if present)
+        shell: bash
+        run: |
+          if [ -f schemas/setup.schema.json ]; then
+            python - <<'PY'
+import json, glob, sys
+import jsonschema
+from pathlib import Path
+
+schema_path = Path("schemas/setup.schema.json")
+schema = json.load(open(schema_path, "r", encoding="utf-8"))
+ok = True
+
+for f in glob.glob("setups/**/*.json", recursive=True):
+    try:
+        data = json.load(open(f, "r", encoding="utf-8"))
+        jsonschema.validate(instance=data, schema=schema)
+        print("OK", f)
+    except Exception as e:
+        ok = False
+        print("ERR", f, "->", e)
+
+if not ok:
+    sys.exit(1)
+PY
+          fi
+
+      - name: Validate SignalEvent integrity (CF-101..105)
+        shell: bash
+        run: |
+          python - <<'PY'
+import json, sys, glob, datetime
+from pathlib import Path
+
+def validate_signal(signal):
+    errs=[]
+    if signal.get("price_update_time") == signal.get("signal_time"):
+        errs.append("CF-101")
+    if signal.get("data_delay_ms", 0) > 3000:
+        errs.append("CF-102")
+    if signal.get("confidence_score", 1) < 0.3:
+        errs.append("CF-103")
+    if "recent_signals" in signal:
+        now = datetime.datetime.now(datetime.timezone.utc)
+        for prev in signal["recent_signals"]:
+            try:
+                t = prev.get("timestamp")
+                if isinstance(t, (int, float)):
+                    ts = datetime.datetime.fromtimestamp(t/1000 if t > 1e12 else t, tz=datetime.timezone.utc)
+                elif isinstance(t, str):
+                    ts = datetime.datetime.fromisoformat(t.replace("Z","+00:00"))
+                else:
+                    continue
+            except Exception:
+                continue
+            if prev.get("id") == signal.get("id") and (now - ts).total_seconds() < 5:
+                errs.append("CF-104")
+                break
+    if signal.get("override_flag") and signal.get("confidence_score", 1) < 0.1:
+        errs.append("CF-105")
+    return errs
+
+candidates = []
+candidates += glob.glob("runs/**/*.json", recursive=True)
+candidates += glob.glob("engine/**/*.json", recursive=True)
+candidates += glob.glob("**/signals*.json", recursive=True)
+
+ok = True
+for f in candidates:
+    try:
+        obj = json.load(open(f, "r", encoding="utf-8"))
+    except Exception:
+        continue
+    signals = []
+    if isinstance(obj, dict):
+        if obj.get("type") == "SignalEvent":
+            signals = [obj]
+        elif isinstance(obj.get("signals"), list):
+            signals = obj["signals"]
+    for s in signals:
+        errs = validate_signal(s)
+        if errs:
+            ok = False
+            print(f"ERR {f}: {','.join(errs)}")
+
+if not ok:
+    sys.exit(1)
+else:
+    print("SignalEvent integrity OK")
+PY
+
+      - name: Persist CI reports
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p runs/ci
+          python - <<'PY'
+import json, os, datetime
+os.makedirs("runs/ci", exist_ok=True)
+json.dump({"status":"completed","ts":datetime.datetime.utcnow().isoformat()+"Z"}, open("runs/ci/validator_report.json","w"))
+PY
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ontology-ci-artifacts
+          path: runs/ci
