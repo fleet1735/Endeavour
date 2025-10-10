@@ -93,7 +93,7 @@ def main():
         "ontology_version": "1.0.1",
         "checked": ["CF-101","CF-102","CF-103","CF-104","CF-105"],
         "strict": args.strict,
-        "ts": datetime.utcnow().isoformat()+"Z",
+        "ts": datetime.now(timezone.utc).isoformat()+"Z",
         "counts": {k:v.get("count",0) for k,v in results.items()},
         "pass": all(oks)
     }

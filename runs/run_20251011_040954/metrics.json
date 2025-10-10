@@ -1,0 +1,16 @@
+{
+  "ontology_version": "1.0.1",
+  "entity": "MetricSummary",
+  "run_id": "run_20251010_190955_d71211",
+  "setup_ref": "MA_Crossover",
+  "engine_version": "skel-1.0",
+  "totals": {
+    "pnl": 3300.0,
+    "mdd": 0.0,
+    "hit_ratio": 0.0,
+    "sharpe": 0.0,
+    "turnover": 0.0,
+    "exposure": 0.0
+  },
+  "hashes": {}
+}

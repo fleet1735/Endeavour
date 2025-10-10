@@ -17,7 +17,7 @@ def read_prices_csv(path):
             data.append({"date": r["date"], "open": float(r["open"]), "close": float(r["close"])})
     return data
 
-def run_id(): return datetime.utcnow().strftime("run_%Y%m%d_%H%M%S") + "_" + uuid.uuid4().hex[:6]
+def run_id(): return datetime.now(timezone.utc).strftime("run_%Y%m%d_%H%M%S") + "_" + uuid.uuid4().hex[:6]
 
 def sma(arr, n):
     out=[]
