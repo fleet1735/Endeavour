@@ -7,3 +7,7 @@ jobs:
     steps:
       - name: Echo
         run: echo "runner up"
+      - name: Python env
+        run: |
+          python3 --version || true
+          pip3 --version || true
