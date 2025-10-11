@@ -4,6 +4,21 @@ on:
   push:
     branches: [ "main" ]
     paths:
+      - ".github/workflows/ontology_ci_v2.yml"
+      - "validator/**"
+      - "schemas/**"
+      - "registry.yaml"
+      - "registry.yml"
+      - "runs/**"
+      - "engine/**"
+      - "setups/**"
+  workflow_dispatch:
+
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
       - ".github/workflows/ontology_ci.yml"
       - "validator/**"
       - "schemas/**"
