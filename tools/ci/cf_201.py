@@ -18,8 +18,7 @@ def main():
     pathlib.Path("artifacts").mkdir(exist_ok=True)
     pathlib.Path("artifacts/cf_201.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"[cf_201] {'PASS' if ok else 'FAIL'}")
-    return 2
+    return 0 if ok else 2
 
 if __name__ == "__main__":
     sys.exit(main())
-
