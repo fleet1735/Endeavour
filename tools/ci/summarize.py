@@ -6,6 +6,20 @@ def load(name):
     return json.loads(p.read_text(encoding="utf-8")) if p.exists() else {"name": name, "pass": False, "details": ["missing"]}
 
 def main():
+    import os, pathlib
+    # Gate FAIL 강제용: repo 루트의 flag 파일이 있으면 summary.pass=false
+    if os.path.exists("force_gate_fail.flag") or os.environ.get("GATE_FORCE_FALSE") == "1":
+        a = {"name":"cf_101","pass": True, "details":["forced context"]}
+        b = {"name":"cf_201","pass": True, "details":["forced context"]}
+        all_ok = False
+        md = ["# VALIDATOR_REPORT","", "## cf_101","- pass: True","- details: [\"forced context\"]","",
+              "## cf_201","- pass: True","- details: [\"forced context\"]","",
+              "**summary.pass=false**"]
+        pathlib.Path("VALIDATOR_REPORT.md").write_text("\n".join(md), encoding="utf-8")
+        pathlib.Path("artifacts").mkdir(exist_ok=True)
+        pathlib.Path("artifacts/summary_line.txt").write_text("summary.pass=false", encoding="utf-8")
+        print("[summarize] forced gate failure via flag")
+        return 0
     a = load("cf_101")
     b = load("cf_201")
     all_ok = a.get("pass") and b.get("pass")
@@ -26,3 +40,4 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+
