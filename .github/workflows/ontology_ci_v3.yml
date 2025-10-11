@@ -1,4 +1,19 @@
-name: "ci(ontology): v3 — CF-ONT-101 DSL Integrity + CF-ONT-201 SSOT Cohesion"
+name: "ci(ontology): v3 — CF-ONT-101/201"
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "main" ]
+    paths:
+      - ".github/workflows/ontology_ci_v3.yml"
+      - "validator/**"
+      - "schemas/**"
+      - "registry.yaml"
+      - "registry.yml"
+      - "runs/**"
+      - "engine/**"
+      - "setups/**"
+
 
 on:
   workflow_dispatch:
