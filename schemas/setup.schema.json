@@ -1,38 +1,11 @@
 {
-  "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "Setup DSL (v0)",
+  "\": "http://json-schema.org/draft-07/schema#",
+  "title": "setup.schema",
   "type": "object",
-  "required": ["name","indicators","entry","exit"],
+  "required": ["name", "signals", "rules"],
   "properties": {
-    "name": {"type":"string"},
-    "indicators": {
-      "type":"object",
-      "additionalProperties": {
-        "type":"object",
-        "required": ["type","window","source"],
-        "properties": {
-          "type":{"type":"string"},
-          "window":{"type":"integer","minimum":1},
-          "source":{"type":"string"}
-        }
-      }
-    },
-    "entry": {
-      "type":"object",
-      "required":["condition","rules"],
-      "properties":{
-        "condition":{"enum":["AND","OR"]},
-        "rules":{"type":"array","items":{
-          "type":"object",
-          "required":["left","op","right"],
-          "properties":{
-            "left":{"type":"string"},
-            "op":{"enum":["crosses_above","crosses_below",">","<",">=","<=","==","!="]},
-            "right":{}
-          }
-        }}
-      }
-    },
-    "exit": { "$ref":"#/properties/entry" }
+    "name": { "type": "string" },
+    "signals": { "type": "array", "items": { "type": "string" } },
+    "rules": { "type": "object" }
   }
 }

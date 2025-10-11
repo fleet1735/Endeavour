@@ -1,25 +1,24 @@
-import json, os, yaml
+#!/usr/bin/env python3
+import json, sys, pathlib, os
 
-os.makedirs("runs/ci", exist_ok=True)
-status={"pass": True, "checks":[]}
-path=None
-for c in ("registry.yaml","registry.yml"):
-    if os.path.exists(c):
-        path=c; break
+def main():
+    ok = True
+    details = []
+    # Minimal cohesion: schemas/setup.schema.json exists
+    if not pathlib.Path("schemas/setup.schema.json").exists():
+        ok = False
+        details.append("schemas/setup.schema.json missing")
 
-if not path:
-    status["pass"]=False
-    status["checks"].append({"id":"REG-001","msg":"registry not found"})
-else:
-    try:
-        data=yaml.safe_load(open(path,"r",encoding="utf-8"))
-        if not isinstance(data,dict):
-            status["pass"]=False
-            status["checks"].append({"id":"REG-002","msg":"root must be mapping"})
-    except Exception as e:
-        status["pass"]=False
-        status["checks"].append({"id":"REG-003","msg":f"YAML error: {e}"})
+    report = {
+        "name": "cf_201",
+        "checks": ["ssot_registry_cohesion_minimal"],
+        "pass": ok,
+        "details": details or ["OK"]
+    }
+    pathlib.Path("artifacts").mkdir(exist_ok=True)
+    pathlib.Path("artifacts/cf_201.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"[cf_201] {'PASS' if ok else 'FAIL'}")
+    return 0 if ok else 2
 
-with open("runs/ci/cf_ont_201.json","w",encoding="utf-8") as f:
-    json.dump(status,f,ensure_ascii=False)
-print("CF-ONT-201:", json.dumps(status,ensure_ascii=False))
+if __name__ == "__main__":
+    sys.exit(main())

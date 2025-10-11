@@ -1,43 +1,33 @@
-name: "ci-main smoke+validators"
+name: \"ci-main smoke\"
 on:
   push:
 jobs:
   t:
     runs-on: ubuntu-latest
     steps:
-      - name: Echo
-        run: echo "runner up"
-
-      - name: Python env
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Prepare artifacts dir
+        run: mkdir -p artifacts
+      - name: Run cf_101
+        run: python tools/ci/cf_101.py
+      - name: Run cf_201
+        run: python tools/ci/cf_201.py
+      - name: Summarize
         run: |
-          python3 --version || true
-          pip3 --version || true
-          python3 -m pip install --user --upgrade pip
-          python3 -m pip install --user pyyaml jsonschema || true
-
-      - name: Fetch repo via codeload (public, retry)
-        run: |
-          set -e
-          rm -rf work && mkdir -p work
-          curl --retry 6 --retry-delay 2 -L -o src.zip "https://codeload.github.com/fleet1735/Endeavour/zip/refs/heads/main"
-          unzip -q src.zip -d work
-          mv work/Endeavour-main work/src
-          ls -la work/src | head -n 20 || true
-
-      - name: Run CF-ONT-101..105
-        run: |
-          set -e
-          cd work/src
-          python3 tools/ci/cf_101.py
-
-      - name: Run CF-ONT-201
-        run: |
-          set -e
-          cd work/src
-          python3 tools/ci/cf_201.py
-
-      - name: Summarize → step summary & exit
-        run: |
-          set -e
-          cd work/src
-          python3 tools/ci/summarize.py
+          python tools/ci/summarize.py
+          echo \"### VALIDATOR_REPORT\" >> \
+          echo \"\" >> \
+          cat VALIDATOR_REPORT.md >> \
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: validator-artifacts
+          path: |
+            artifacts/*.json
+            artifacts/summary_line.txt
+            VALIDATOR_REPORT.md
