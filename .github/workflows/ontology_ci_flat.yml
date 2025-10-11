@@ -1,12 +1,127 @@
-name: "ci-ontology-flat-min"
+name: "ci-ontology-flat (no-uses; 101/201)"
 
 on:
-  push:
   workflow_dispatch:
+  push:
+    branches: [ "main" ]
+
+permissions:
+  contents: read
 
 jobs:
   validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      REPO_FULL: ${{ github.repository }}
+      REF_NAME:  ${{ github.ref_name }}
+      GHTOKEN:   ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - name: echo
-        run: echo runner_ok
+      - name: Prepare repo (no marketplace actions)
+        run: |
+          set -e
+          rm -rf work && mkdir -p work
+          git clone --no-tags --depth 1 --branch "$REF_NAME" "https://x-access-token:${GHTOKEN}@github.com/${REPO_FULL}" work
+          cd work
+          echo "HEAD:" $(git rev-parse --short HEAD)
+          python3 --version || true
+          pip3 --version || true
+
+      - name: Install deps
+        run: |
+          set -e
+          cd work
+          python3 -m pip install --user --upgrade pip
+          python3 -m pip install --user pyyaml jsonschema
+
+      - name: CF-ONT-101..105 — SignalEvent integrity (inline)
+        continue-on-error: true
+        run: |
+          set -e
+          cd work
+          python3 - <<'PY'
+import json, sys, glob, datetime, os
+os.makedirs("runs/ci", exist_ok=True)
+
+def validate_signal(signal):
+    errs=[]
+    if signal.get("price_update_time") == signal.get("signal_time"): errs.append("CF-101")
+    if signal.get("data_delay_ms", 0) > 3000: errs.append("CF-102")
+    if signal.get("confidence_score", 1) < 0.3: errs.append("CF-103")
+    if "recent_signals" in signal:
+        now = datetime.datetime.now(datetime.timezone.utc)
+        for prev in signal["recent_signals"]:
+            try:
+                import datetime as dt
+                t = prev.get("timestamp")
+                if isinstance(t,(int,float)):
+                    ts=dt.datetime.fromtimestamp(t/1000 if t>1e12 else t, tz=dt.timezone.utc)
+                elif isinstance(t,str):
+                    ts=dt.datetime.fromisoformat(t.replace("Z","+00:00"))
+                else:
+                    continue
+            except Exception:
+                continue
+            if prev.get("id")==signal.get("id") and (now-ts).total_seconds()<5:
+                errs.append("CF-104"); break
+    if signal.get("override_flag") and signal.get("confidence_score",1) < 0.1:
+        errs.append("CF-105")
+    return errs
+
+cands = sorted(set(glob.glob("runs/**/*.json",recursive=True)+
+                   glob.glob("engine/**/*.json",recursive=True)+
+                   glob.glob("**/signals*.json",recursive=True)))
+results=[]; ok=True
+for f in cands:
+    try: obj=json.load(open(f,"r",encoding="utf-8"))
+    except Exception: continue
+    sigs=[]
+    if isinstance(obj,dict):
+        if obj.get("type")=="SignalEvent": sigs=[obj]
+        elif isinstance(obj.get("signals"),list): sigs=obj["signals"]
+    for s in sigs:
+        errs=validate_signal(s); results.append({"file":f,"errors":errs})
+        if errs: ok=False
+rep={"pass":ok,"details":results,"files_scanned":len(cands)}
+open("runs/ci/cf_ont_101.json","w",encoding="utf-8").write(json.dumps(rep,ensure_ascii=False,indent=2))
+print("CF-ONT-101..105:", json.dumps(rep,ensure_ascii=False))
+PY
+
+      - name: CF-ONT-201 — SSOT registry cohesion (inline minimal)
+        continue-on-error: true
+        run: |
+          set -e
+          cd work
+          python3 - <<'PY'
+import json, os, yaml
+os.makedirs("runs/ci", exist_ok=True)
+status={"pass": True, "checks":[]}
+paths=["registry.yaml","registry.yml"]
+exists=[p for p in paths if os.path.exists(p)]
+if not exists:
+    status["pass"]=False; status["checks"].append({"id":"REG-001","msg":"registry.(yaml|yml) not found"})
+else:
+    p=exists[0]
+    try:
+        data=yaml.safe_load(open(p,"r",encoding="utf-8"))
+        if not isinstance(data,dict):
+            status["pass"]=False; status["checks"].append({"id":"REG-002","msg":"registry root must be mapping"})
+    except Exception as e:
+        status["pass"]=False; status["checks"].append({"id":"REG-003","msg":f"YAML load error: {e}"})
+open("runs/ci/cf_ont_201.json","w",encoding="utf-8").write(json.dumps(status,ensure_ascii=False,indent=2))
+print("CF-ONT-201:", json.dumps(status,ensure_ascii=False))
+PY
+
+      - name: Summarize (print VALIDATOR_REPORT)
+        run: |
+          set -e
+          cd work
+          python3 - <<'PY'
+import json, os
+rep={}
+for fn in ("runs/ci/cf_ont_101.json","runs/ci/cf_ont_201.json"):
+    if os.path.exists(fn):
+        rep[os.path.basename(fn)]=json.load(open(fn,"r",encoding="utf-8"))
+rep["summary"]={"pass": all(v.get("pass",False) for v in rep.values()) if rep else False}
+print("VALIDATOR_REPORT:", json.dumps(rep,ensure_ascii=False))
+PY
