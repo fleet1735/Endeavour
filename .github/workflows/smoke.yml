@@ -1,0 +1,11 @@
+name: "smoke: engine check"
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "main" ]
+jobs:
+  t:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Echo
+        run: echo "smoke ok"
