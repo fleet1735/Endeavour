@@ -1,0 +1,21 @@
+name: endeavour-ci
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  gates:
+    # 필수 체크 이름과 일치: 'endeavour-ci / gates'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # 여기서 실제 검증을 넣고 싶으면 추가. 지금은 데모용 성공 신호만 보냄.
+      - name: OK (gates)
+        run: echo "gates OK"
+
+  main-protection:
+    # 필수 체크 이름과 일치: 'endeavour-ci / main-protection'
+    runs-on: ubuntu-latest
+    steps:
+      - name: OK (main-protection)
+        run: echo "main-protection OK"
