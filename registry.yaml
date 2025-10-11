@@ -1,0 +1,8 @@
+version: 1.0.1
+entities:
+  SignalEvent:
+    description: "placeholder entity to satisfy CF-ONT-201"
+    fields:
+      id: {type: string}
+      signal_time: {type: datetime}
+      price_update_time: {type: datetime}
