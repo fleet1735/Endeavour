@@ -1,0 +1,6 @@
+name: "ci(ontology): dispatch"
+on:
+  workflow_dispatch:
+jobs:
+  call_core:
+    uses: fleet1735/Endeavour/.github/workflows/ontology_ci_core.yml@main
