@@ -1,4 +1,4 @@
-name: "ci-main smoke"
+name: "ci-main smoke+validators"
 on:
   push:
 jobs:
@@ -13,8 +13,7 @@ jobs:
           python3 --version || true
           pip3 --version || true
           python3 -m pip install --user --upgrade pip
-          # 일부 러너 환경에서 필요할 수 있음
-          python3 -m pip install --user --break-system-packages pyyaml jsonschema || python3 -m pip install --user pyyaml jsonschema
+          python3 -m pip install --user pyyaml jsonschema || true
 
       - name: Fetch repo via codeload (public, retry)
         run: |
@@ -25,78 +24,20 @@ jobs:
           mv work/Endeavour-main work/src
           ls -la work/src | head -n 20 || true
 
-      - name: CF-ONT-101..105 — SignalEvent integrity
+      - name: Run CF-ONT-101..105
         run: |
           set -e
           cd work/src
-          python3 - <<'PY'
-import json, glob, os
-os.makedirs("runs/ci", exist_ok=True)
+          python3 tools/ci/cf_101.py
 
-def validate_signal(s):
-  e=[]
-  if s.get("price_update_time")==s.get("signal_time"): e.append("CF-101")
-  if s.get("data_delay_ms",0)>3000: e.append("CF-102")
-  if s.get("confidence_score",1)<0.3: e.append("CF-103")
-  if s.get("override_flag") and s.get("confidence_score",1)<0.1: e.append("CF-105")
-  return e
-
-files=sorted(set(glob.glob("runs/**/*.json",recursive=True)+glob.glob("engine/**/*.json",recursive=True)+glob.glob("**/signals*.json",recursive=True)))
-ok=True; details=[]
-for f in files:
-  try: obj=json.load(open(f,"r",encoding="utf-8"))
-  except Exception: continue
-  sigs=[]
-  if isinstance(obj,dict):
-    if obj.get("type")=="SignalEvent": sigs=[obj]
-    elif isinstance(obj.get("signals"),list): sigs=obj["signals"]
-  for s in sigs:
-    errs=validate_signal(s); details.append({"file":f,"errors":errs}); ok = ok and (not errs)
-rep={"pass":ok,"details":details,"files_scanned":len(files)}
-open("runs/ci/cf_ont_101.json","w",encoding="utf-8").write(json.dumps(rep,ensure_ascii=False))
-print("CF-ONT-101..105:", json.dumps(rep,ensure_ascii=False))
-PY
-
-      - name: CF-ONT-201 — SSOT registry cohesion
+      - name: Run CF-ONT-201
         run: |
           set -e
           cd work/src
-          python3 - <<'PY'
-import json, os, yaml
-os.makedirs("runs/ci", exist_ok=True)
-status={"pass": True, "checks":[]}
-path=None
-for c in ("registry.yaml","registry.yml"):
-  if os.path.exists(c): path=c; break
-if not path:
-  status["pass"]=False; status["checks"].append({"id":"REG-001","msg":"registry not found"})
-else:
-  try:
-    data=yaml.safe_load(open(path,"r",encoding="utf-8"))
-    if not isinstance(data,dict):
-      status["pass"]=False; status["checks"].append({"id":"REG-002","msg":"root must be mapping"})
-  except Exception as e:
-    status["pass"]=False; status["checks"].append({"id":"REG-003","msg":f"YAML error: {e}"})
-open("runs/ci/cf_ont_201.json","w",encoding="utf-8").write(json.dumps(status,ensure_ascii=False))
-print("CF-ONT-201:", json.dumps(status,ensure_ascii=False))
-PY
+          python3 tools/ci/cf_201.py
 
-      - name: Summarize → console + step summary + exit code
+      - name: Summarize → step summary & exit
         run: |
           set -e
           cd work/src
-          python3 - <<'PY'
-import json, os, sys
-rep={}
-for fn in ("runs/ci/cf_ont_101.json","runs/ci/cf_ont_201.json"):
-  if os.path.exists(fn):
-    rep[os.path.basename(fn)]=json.load(open(fn,"r",encoding="utf-8"))
-rep["summary"]={"pass": all(v.get("pass",False) for v in rep.values()) if rep else False}
-txt=json.dumps(rep,ensure_ascii=False)
-print("VALIDATOR_REPORT:", txt)
-summ=os.environ.get("GITHUB_STEP_SUMMARY")
-if summ:
-  with open(summ,"a",encoding="utf-8") as f:
-    f.write("### VALIDATOR_REPORT\\n\\n```\n"+txt+"\n```\\n")
-sys.exit(0 if rep["summary"].get("pass",False) else 1)
-PY
+          python3 tools/ci/summarize.py
