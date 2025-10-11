@@ -1,4 +1,4 @@
-name: "ci(ontology): core — inline CF-ONT-101/201"
+name: "ci(ontology): core — inline CF-ONT-101/201 (resilient)"
 
 on:
   workflow_call:
@@ -16,123 +16,106 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install pyyaml jsonschema
+
+      # 101..105: 실패해도 워크플로는 계속 진행
       - name: CF-ONT-101..105 — SignalEvent integrity (inline)
+        continue-on-error: true
         shell: bash
         run: |
           python - <<'PY'
-import json, sys, glob, datetime, os, pathlib
-from pathlib import Path
+import json, sys, glob, datetime, os
+os.makedirs("runs/ci", exist_ok=True)
 
 def validate_signal(signal):
     errs=[]
-    # CF-101: 동시 업데이트 충돌(예시)
-    if signal.get("price_update_time") == signal.get("signal_time"):
-        errs.append("CF-101")
-    # CF-102: 시장 데이터 지연
-    if signal.get("data_delay_ms", 0) > 3000:
-        errs.append("CF-102")
-    # CF-103: confidence 하한
-    if signal.get("confidence_score", 1) < 0.3:
-        errs.append("CF-103")
-    # CF-104: 5초 내 동일 id 재발행 방지(예시)
+    if signal.get("price_update_time") == signal.get("signal_time"): errs.append("CF-101")
+    if signal.get("data_delay_ms", 0) > 3000: errs.append("CF-102")
+    if signal.get("confidence_score", 1) < 0.3: errs.append("CF-103")
     if "recent_signals" in signal:
         now = datetime.datetime.now(datetime.timezone.utc)
         for prev in signal["recent_signals"]:
             try:
                 t = prev.get("timestamp")
-                if isinstance(t, (int, float)):
-                    ts = datetime.datetime.fromtimestamp(t/1000 if t > 1e12 else t, tz=datetime.timezone.utc)
-                elif isinstance(t, str):
-                    ts = datetime.datetime.fromisoformat(t.replace("Z","+00:00"))
+                if isinstance(t,(int,float)):
+                    ts=datetime.datetime.fromtimestamp(t/1000 if t>1e12 else t, tz=datetime.timezone.utc)
+                elif isinstance(t,str):
+                    ts=datetime.datetime.fromisoformat(t.replace("Z","+00:00"))
                 else:
                     continue
             except Exception:
                 continue
-            if prev.get("id") == signal.get("id") and (now - ts).total_seconds() < 5:
-                errs.append("CF-104")
-                break
-    # CF-105: override_flag 시 추가 하한
-    if signal.get("override_flag") and signal.get("confidence_score", 1) < 0.1:
+            if prev.get("id")==signal.get("id") and (now-ts).total_seconds()<5:
+                errs.append("CF-104"); break
+    if signal.get("override_flag") and signal.get("confidence_score",1) < 0.1:
         errs.append("CF-105")
     return errs
 
-os.makedirs("runs/ci", exist_ok=True)
-candidates = []
-candidates += glob.glob("runs/**/*.json", recursive=True)
-candidates += glob.glob("engine/**/*.json", recursive=True)
-candidates += glob.glob("**/signals*.json", recursive=True)
-
-results = []
-ok = True
-for f in sorted(set(candidates)):
-    try:
-        obj = json.load(open(f, "r", encoding="utf-8"))
-    except Exception:
-        continue
-    signals = []
-    if isinstance(obj, dict):
-        if obj.get("type") == "SignalEvent":
-            signals = [obj]
-        elif isinstance(obj.get("signals"), list):
-            signals = obj["signals"]
+candidates = sorted(set(glob.glob("runs/**/*.json",recursive=True)+
+                        glob.glob("engine/**/*.json",recursive=True)+
+                        glob.glob("**/signals*.json",recursive=True)))
+results=[]; ok=True
+for f in candidates:
+    try: obj=json.load(open(f,"r",encoding="utf-8"))
+    except Exception: continue
+    signals=[]
+    if isinstance(obj,dict):
+        if obj.get("type")=="SignalEvent": signals=[obj]
+        elif isinstance(obj.get("signals"),list): signals=obj["signals"]
     for s in signals:
-        errs = validate_signal(s)
-        results.append({"file": f, "errors": errs})
-        if errs:
-            ok = False
-
-rep = {"pass": ok, "details": results}
-json.dump(rep, open("runs/ci/cf_ont_101.json","w",encoding="utf-8"), ensure_ascii=False, indent=2)
-print(json.dumps(rep, ensure_ascii=False))
-sys.exit(0 if ok else 1)
+        errs=validate_signal(s); results.append({"file":f,"errors":errs})
+        if errs: ok=False
+json.dump({"pass":ok,"details":results},
+          open("runs/ci/cf_ont_101.json","w",encoding="utf-8"),
+          ensure_ascii=False, indent=2)
+print("CF-ONT-101..105 pass=", ok)
 PY
-      - name: CF-ONT-201 — Registry cohesion (inline minimal)
+
+      # 201: 실패해도 계속 진행
+      - name: CF-ONT-201 — SSOT registry cohesion (inline minimal)
+        continue-on-error: true
         shell: bash
         run: |
           python - <<'PY'
-import json, sys, os, yaml
+import json, os, yaml
 os.makedirs("runs/ci", exist_ok=True)
-status = {"pass": True, "checks":[]}
-paths = ["registry.yaml","registry.yml"]
-exists = [p for p in paths if os.path.exists(p)]
+status={"pass": True, "checks":[]}
+paths=["registry.yaml","registry.yml"]
+exists=[p for p in paths if os.path.exists(p)]
 if not exists:
-    status["pass"]=False
-    status["checks"].append({"id":"REG-001","msg":"registry.(yaml|yml) not found"})
+    status["pass"]=False; status["checks"].append({"id":"REG-001","msg":"registry.(yaml|yml) not found"})
 else:
     p=exists[0]
     try:
-        with open(p,"r",encoding="utf-8") as f:
-            data=yaml.safe_load(f)
-        if not isinstance(data, dict):
-            status["pass"]=False
-            status["checks"].append({"id":"REG-002","msg":"registry root must be mapping"})
-        # (필요 시 키 존재/버전 규칙 등 추가)
+        data=yaml.safe_load(open(p,"r",encoding="utf-8"))
+        if not isinstance(data,dict):
+            status["pass"]=False; status["checks"].append({"id":"REG-002","msg":"registry root must be mapping"})
     except Exception as e:
-        status["pass"]=False
-        status["checks"].append({"id":"REG-003","msg":f"YAML load error: {e}"})
+        status["pass"]=False; status["checks"].append({"id":"REG-003","msg":f"YAML load error: {e}"})
 open("runs/ci/cf_ont_201.json","w",encoding="utf-8").write(json.dumps(status,ensure_ascii=False,indent=2))
-print(json.dumps(status,ensure_ascii=False))
-sys.exit(0 if status["pass"] else 1)
+print("CF-ONT-201 pass=", status["pass"])
 PY
-      - name: Synthesize report
-        if: always()
+
+      # 종합판정 + 리포트 생성 (여기서 최종 실패/성공 결정)
+      - name: Synthesize report & decide conclusion
         shell: bash
         run: |
           python - <<'PY'
-import json, os, datetime, pathlib
+import json, os, datetime, pathlib, sys
 pathlib.Path("runs/ci").mkdir(parents=True, exist_ok=True)
 r={}
 for f in ["runs/ci/cf_ont_101.json","runs/ci/cf_ont_201.json"]:
     if os.path.exists(f):
-        try:
-            r[os.path.basename(f)] = json.load(open(f,"r",encoding="utf-8"))
-        except Exception as e:
-            r[os.path.basename(f)] = {"read_error": True, "err": str(e)}
+        try: r[os.path.basename(f)] = json.load(open(f,"r",encoding="utf-8"))
+        except Exception as e: r[os.path.basename(f)] = {"read_error": True, "err": str(e)}
+    else:
+        r[os.path.basename(f)] = {"missing": True, "pass": False}
 r["summary"]={"ts":datetime.datetime.utcnow().isoformat()+"Z",
               "pass": all(v.get("pass",False) for k,v in r.items() if k.endswith(".json"))}
 open("runs/ci/validator_report.json","w",encoding="utf-8").write(json.dumps(r,ensure_ascii=False,indent=2))
 print(json.dumps(r,ensure_ascii=False))
+sys.exit(0 if r["summary"]["pass"] else 1)
 PY
+
       - name: Upload artifacts
         if: always()
         uses: actions/upload-artifact@v4
