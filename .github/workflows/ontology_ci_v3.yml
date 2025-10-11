@@ -1,0 +1,11 @@
+name: "ci(ontology): v3 — dispatch smoke + 101/201"
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "main" ]
+jobs:
+  t:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Echo (dispatch check)
+        run: echo "v3 dispatch ok"
