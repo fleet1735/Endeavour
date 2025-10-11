@@ -11,3 +11,11 @@ jobs:
         run: |
           python3 --version || true
           pip3 --version || true
+      - name: Fetch repo via codeload (public, retry)
+        run: |
+          set -e
+          rm -rf work && mkdir -p work
+          curl --retry 6 --retry-delay 2 -L -o src.zip "https://codeload.github.com/fleet1735/Endeavour/zip/refs/heads/main"
+          unzip -q src.zip -d work
+          mv work/Endeavour-main work/src
+          ls -la work/src | head -n 20 || true
