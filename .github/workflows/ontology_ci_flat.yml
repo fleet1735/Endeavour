@@ -1,4 +1,4 @@
-name: "ci(ontology): flat — CF-ONT-101/201 (inline)"
+name: "ci-ontology-flat (inline 101/201)"
 
 on:
   workflow_dispatch:
