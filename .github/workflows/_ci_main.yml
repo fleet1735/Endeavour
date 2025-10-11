@@ -1,4 +1,4 @@
-name: "ci-main (flat 101/201; no uses/secrets)"
+name: "ci-main (flat 101/201; resilient, no uses/secrets)"
 
 on:
   push:
@@ -9,24 +9,24 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - name: Fetch repo via codeload (public)
+      - name: Fetch repo via codeload (public, retry)
         run: |
           set -e
           rm -rf work && mkdir -p work
-          curl --retry 5 -L -o src.zip "https://codeload.github.com/fleet1735/Endeavour/zip/refs/heads/main"
+          curl --retry 6 --retry-delay 2 -L -o src.zip "https://codeload.github.com/fleet1735/Endeavour/zip/refs/heads/main"
           unzip -q src.zip -d work
           mv work/Endeavour-main work/src
 
-      - name: Python env + deps
+      - name: Python env + deps (tolerant)
         run: |
           set -e
           python3 --version || true
           pip3 --version || true
           python3 -m pip install --user --upgrade pip
-          python3 -m pip install --user pyyaml jsonschema
+          # 우분투 최신 이미지에서 사용자 영역 설치 시 필요할 수 있음
+          python3 -m pip install --user --break-system-packages pyyaml jsonschema || python3 -m pip install --user pyyaml jsonschema
 
       - name: CF-ONT-101..105 — SignalEvent integrity
-        continue-on-error: true
         run: |
           set -e
           cd work/src
@@ -51,12 +51,12 @@ for f in files:
     elif isinstance(obj.get("signals"),list): sigs=obj["signals"]
   for s in sigs:
     errs=validate_signal(s); details.append({"file":f,"errors":errs}); ok = ok and (not errs)
-open("runs/ci/cf_ont_101.json","w",encoding="utf-8").write(json.dumps({"pass":ok,"details":details,"files_scanned":len(files)},ensure_ascii=False,indent=2))
-print("CF-ONT-101..105 pass=",ok)
+rep={"pass":ok,"details":details,"files_scanned":len(files)}
+open("runs/ci/cf_ont_101.json","w",encoding="utf-8").write(json.dumps(rep,ensure_ascii=False,indent=2))
+print("CF-ONT-101..105:", json.dumps(rep,ensure_ascii=False))
 PY
 
       - name: CF-ONT-201 — SSOT registry cohesion
-        continue-on-error: true
         run: |
           set -e
           cd work/src
@@ -77,18 +77,29 @@ else:
   except Exception as e:
     status["pass"]=False; status["checks"].append({"id":"REG-003","msg":f"YAML error: {e}"})
 open("runs/ci/cf_ont_201.json","w",encoding="utf-8").write(json.dumps(status,ensure_ascii=False,indent=2))
-print("CF-ONT-201 pass=",status["pass"])
+print("CF-ONT-201:", json.dumps(status,ensure_ascii=False))
 PY
 
-      - name: Summarize (VALIDATOR_REPORT)
+      - name: Summarize → Console + Step Summary + Exit code
         run: |
           set -e
           cd work/src
           python3 - <<'PY'
-import json, os
+import json, os, base64, sys
 rep={}
 for fn in ("runs/ci/cf_ont_101.json","runs/ci/cf_ont_201.json"):
-  if os.path.exists(fn): rep[os.path.basename(fn)]=json.load(open(fn,"r",encoding="utf-8"))
+  if os.path.exists(fn):
+    rep[os.path.basename(fn)]=json.load(open(fn,"r",encoding="utf-8"))
 rep["summary"]={"pass": all(v.get("pass",False) for v in rep.values()) if rep else False}
-print("VALIDATOR_REPORT:", json.dumps(rep,ensure_ascii=False))
+txt = json.dumps(rep,ensure_ascii=False)
+print("VALIDATOR_REPORT:", txt)
+
+# Step Summary에도 남김(웹 UI에서 즉시 확인 가능)
+summ=os.environ.get("GITHUB_STEP_SUMMARY")
+if summ:
+  with open(summ,"a",encoding="utf-8") as f:
+    f.write("### VALIDATOR_REPORT\\n\\n```\n"+txt+"\n```\\n")
+
+# 실패면 명시적으로 실패 종료
+sys.exit(0 if rep["summary"].get("pass",False) else 1)
 PY
