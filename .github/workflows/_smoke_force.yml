@@ -1,0 +1,12 @@
+name: "smoke: force runner up"
+on:
+  workflow_dispatch:
+  push:
+permissions:
+  contents: read
+jobs:
+  t:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Echo
+        run: echo "runner OK"
