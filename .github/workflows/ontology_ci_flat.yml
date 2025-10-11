@@ -1,48 +1,39 @@
-name: "ci-ontology-flat (no-uses; 101/201)"
+name: "ci-ontology-flat (gate-safe no-secrets)"
 
 on:
-  workflow_dispatch:
   push:
-    branches: [ "main" ]
-
-permissions:
-  contents: read
+  workflow_dispatch:
 
 jobs:
   validate:
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    env:
-      REPO_FULL: ${{ github.repository }}
-      REF_NAME:  ${{ github.ref_name }}
-      GHTOKEN:   ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - name: Prepare repo (no marketplace actions)
+      - name: Fetch repo zip (public, no token)
         run: |
           set -e
           rm -rf work && mkdir -p work
-          git clone --no-tags --depth 1 --branch "$REF_NAME" "https://x-access-token:${GHTOKEN}@github.com/${REPO_FULL}" work
-          cd work
-          echo "HEAD:" $(git rev-parse --short HEAD)
-          python3 --version || true
-          pip3 --version || true
+          curl -L -o src.zip "https://codeload.github.com/fleet1735/Endeavour/zip/refs/heads/main"
+          unzip -q src.zip -d work
+          mv work/Endeavour-main work/src
+          ls -la work/src | head -n 50 || true
 
-      - name: Install deps
+      - name: Python env
         run: |
           set -e
-          cd work
+          python3 --version || true
+          pip3 --version || true
           python3 -m pip install --user --upgrade pip
           python3 -m pip install --user pyyaml jsonschema
 
-      - name: CF-ONT-101..105 — SignalEvent integrity (inline)
+      - name: CF-ONT-101..105 — SignalEvent integrity
         continue-on-error: true
         run: |
           set -e
-          cd work
+          cd work/src
           python3 - <<'PY'
 import json, sys, glob, datetime, os
 os.makedirs("runs/ci", exist_ok=True)
-
 def validate_signal(signal):
     errs=[]
     if signal.get("price_update_time") == signal.get("signal_time"): errs.append("CF-101")
@@ -87,11 +78,11 @@ open("runs/ci/cf_ont_101.json","w",encoding="utf-8").write(json.dumps(rep,ensure
 print("CF-ONT-101..105:", json.dumps(rep,ensure_ascii=False))
 PY
 
-      - name: CF-ONT-201 — SSOT registry cohesion (inline minimal)
+      - name: CF-ONT-201 — SSOT registry cohesion
         continue-on-error: true
         run: |
           set -e
-          cd work
+          cd work/src
           python3 - <<'PY'
 import json, os, yaml
 os.makedirs("runs/ci", exist_ok=True)
@@ -115,7 +106,7 @@ PY
       - name: Summarize (print VALIDATOR_REPORT)
         run: |
           set -e
-          cd work
+          cd work/src
           python3 - <<'PY'
 import json, os
 rep={}
