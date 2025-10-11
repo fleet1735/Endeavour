@@ -1,0 +1,12 @@
+{
+    "strategy_id": "SMA_Crossover_V1",
+    "instruments": ["AAPL", "MSFT"],
+    "timeframe": "1d",
+    "params": {
+        "short_window": 10,
+        "long_window": 50
+    },
+    "metadata": {
+        "status": "DRAFT"
+    }
+}
