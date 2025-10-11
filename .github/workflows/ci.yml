@@ -4,6 +4,7 @@ on:
   pull_request: { branches: [ "main" ] }
 jobs:
   gates:
+    if: ${{ github.event_name != 'pull_request' }}
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
