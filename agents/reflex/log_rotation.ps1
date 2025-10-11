@@ -27,3 +27,4 @@ Get-ChildItem -Path $LOG_DIR -File -Exclude "archive" | ForEach-Object {
         }
     }
 }
+

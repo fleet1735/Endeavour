@@ -72,3 +72,4 @@ $idx = @"
 Set-Content -Path $IDX -Value $idx -Encoding UTF8
 Write-Host "[OK] Docs updated (no backups): $DocsRoot"
 
+

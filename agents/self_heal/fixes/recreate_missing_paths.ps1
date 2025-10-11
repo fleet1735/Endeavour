@@ -11,3 +11,4 @@ $need | ForEach-Object {
   if (-not (Test-Path $_)) { New-Item -ItemType Directory -Force -Path $_ | Out-Null; W "경로 복구: $_" }
 }
 exit 0
+

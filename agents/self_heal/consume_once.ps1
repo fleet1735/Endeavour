@@ -20,3 +20,4 @@ $ts = (Get-Date).ToString("s")
 $result = @{ ts=$ts; source="self_heal"; topic="SelfHeal/Result"; payload=@{ ok=$true; actions=@(@{fix="restart_reflex"; rc=0}) } }
 ($result | ConvertTo-Json -Compress -Depth 6) | Add-Content -Path $Bus
 Write-Host "✅ SelfHeal/Result 기록 완료"
+

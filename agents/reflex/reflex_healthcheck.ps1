@@ -27,3 +27,4 @@ if(!(Test-Path $LogDir)){ New-Item -ItemType Directory -Path $LogDir | Out-Null 
 "테스트 로그" | Out-File "$LogDir\health_test_$(Get-Date -Format 'yyyyMMdd_HHmmss').txt" -Encoding UTF8
 
 $Report | Format-List
+

@@ -32,3 +32,4 @@ else { Write-Log ("필수 경로 미존재: " + ($missing -join ", ")) }
 
 # 결과 출력(JSON)
 $results | ConvertTo-Json -Compress
+

@@ -68,3 +68,4 @@ Write-Host ("[INFO] ComplianceAudit log written to {0}" -f $logFile) -Foreground
 # --- Step 5: Git 등록 (commit/push 제외) ---
 git add "scripts/release/auto_release.ps1"
 Write-Host "[INFO] auto_release.ps1 registered in Git index. Manual commit required." -ForegroundColor Yellow
+

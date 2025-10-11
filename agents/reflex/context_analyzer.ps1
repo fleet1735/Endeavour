@@ -58,3 +58,4 @@ catch {
     $errLog = Join-Path $LOG_DIR ("context_error_{0}.log" -f (Get-Date -Format 'yyyyMMdd_HHmmss'))
     "[$(Get-Date)] ERROR: $($_.Exception.Message)" | Out-File -FilePath $errLog -Encoding UTF8 -Force
 }
+

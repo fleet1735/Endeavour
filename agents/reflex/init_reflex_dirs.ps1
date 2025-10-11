@@ -29,3 +29,4 @@ foreach ($d in $dirs) {
 
 Write-Host "✅ 폴더 생성 완료:"
 $dirs | ForEach-Object { Write-Host " - $_" }
+

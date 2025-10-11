@@ -39,3 +39,4 @@ if(Test-Path $PromoS){
 }
 
 Write-Host "✅ 퍼블리시 완료: ci_out → Drive\\docs 반영" -ForegroundColor Green
+

@@ -1,0 +1,42 @@
+name: "ci-main smoke"
+on:
+  push:
+
+jobs:
+  t:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Prepare artifacts dir
+        run: mkdir -p artifacts
+      - name: Run cf_101
+        run: python tools/ci/cf_101.py
+      - name: Run cf_201
+        run: python tools/ci/cf_201.py
+      - name: Summarize
+        run: |
+          python tools/ci/summarize.py
+          echo "### VALIDATOR_REPORT" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          cat VALIDATOR_REPORT.md >> $GITHUB_STEP_SUMMARY
+      - name: Enforce Gate (summary.pass must be true)
+        run: |
+          v=$(sed -n 's/^summary.pass=\(.*\)$/\1/p' artifacts/summary_line.txt)
+          echo "summary.pass=$v"
+          if [ "$v" != "true" ]; then
+            echo "GATE FAIL: summary.pass=$v"
+            exit 2
+          fi
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: validator-artifacts
+          path: |
+            artifacts/*.json
+            artifacts/summary_line.txt
+            VALIDATOR_REPORT.md

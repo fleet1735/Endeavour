@@ -19,3 +19,4 @@ if($cnt -ge 1){
   Write-Host ("FAIL  (최근 {0}s 내 SelfHeal/Result 미발견)" -f $WindowSec)
   exit 1
 }
+

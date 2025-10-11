@@ -40,3 +40,4 @@ if (\.Count -gt 0) {
   Write-Host "OK: no forbidden usage detected."
 }
 Pop-Location
+
