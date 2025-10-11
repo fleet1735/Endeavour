@@ -42,7 +42,6 @@ jobs:
         shell: bash
         run: |
           python validator/registry_cohesion_checker.py > runs/ci/cf_ont_201.json
-          # cf_ont_201.json 의 pass 여부 확인
           python - <<'PY'
 import json,sys
 obj=json.load(open("runs/ci/cf_ont_201.json","r",encoding="utf-8"))
