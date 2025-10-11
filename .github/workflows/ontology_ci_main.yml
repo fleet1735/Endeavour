@@ -12,6 +12,9 @@ on:
       - "runs/**"
       - "engine/**"
       - "setups/**"
+permissions:
+  contents: read
+  actions: write
 jobs:
   call_core:
     uses: fleet1735/Endeavour/.github/workflows/ontology_ci_core.yml@main
