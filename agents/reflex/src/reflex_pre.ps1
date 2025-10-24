@@ -14,7 +14,7 @@ $AUDIT_LOG_DIR = Join-Path $AUDIT_ROOT "audit_logs"
 $CV_STAMP_LITERAL = '{"purged_kfold":{"folds":5},"embargo_days":10,"nested_wf":{"windows":3},"seed":42}'
 
 # Excel Params 5+1 필드 요구(필수 키)
-$EXCEL_REQUIRED_KEYS = @("universe","frequency","capital","fees","slippage","cv_stamp")
+$EXCEL_REQUIRED_KEYS = @("cv_stamp","data_hash","code_hash","param_hash","universe_hash","seed")
 
 # 파일 검색 패턴 (일반화)
 $TEXT_PATTERNS   = @("*.md","*.json","*.yaml","*.yml","*.txt")
