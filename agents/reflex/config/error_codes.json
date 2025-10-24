@@ -1,8 +1,8 @@
 {
   "E-PRE-001": "Required path missing (RepoRoot/.git etc.)",
-  "E-AUDIT-501": "Ledger restore hash mismatch",
-  "E-AUDIT-502": "Excel Params missing required 5+1 fields",
+  "E-PRE-104": "Audit logs root not accessible (D:\\GoogleDrive\\Endeavour_Gov\\audit\\audit_logs)",
+  "E-CV-101":  "CVStampV2 literal not found or mismatched",
   "E-EXCEL-301": "Excel export integrity check failed",
-  "E-DSL-001": "DSL schema validation error",
-  "E-DSL-002": "DSL business rule violation"
+  "E-AUDIT-502": "Excel Params 5+1 fields missing or type mismatch",
+  "E-HASH-201": "summary_hash chain mismatch (Excel ↔ Ledger ↔ Report)"
 }
