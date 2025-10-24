@@ -1,0 +1,8 @@
+{
+  "E-PRE-001": "Required path missing (RepoRoot/.git etc.)",
+  "E-AUDIT-501": "Ledger restore hash mismatch",
+  "E-AUDIT-502": "Excel Params missing required 5+1 fields",
+  "E-EXCEL-301": "Excel export integrity check failed",
+  "E-DSL-001": "DSL schema validation error",
+  "E-DSL-002": "DSL business rule violation"
+}
