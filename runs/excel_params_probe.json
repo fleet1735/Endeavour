@@ -1,0 +1,8 @@
+{
+  "cv_stamp": {"purged_kfold":{"folds":5},"embargo_days":10,"nested_wf":{"windows":3},"seed":42},
+  "data_hash": "hash_data_deadbeef",
+  "code_hash": "hash_code_deadbeef",
+  "param_hash": "hash_param_deadbeef",
+  "universe_hash": "hash_universe_deadbeef",
+  "seed": 42
+}
