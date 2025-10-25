@@ -1,7 +1,11 @@
+# -*- coding: utf-8 -*-
 """
-cv.py — Time-series CV helpers (Purged K-Fold, Embargo, Nested WF)
-Note: This is a stub; real splitters to be implemented next.
+cv.py — CV protocol helpers (Purged K-Fold, embargo, nested WF)
+Contract: CVStampV2 literal must be used verbatim everywhere (SSOT).
 """
-from typing import Dict, Any
-def describe(cv: Dict[str, Any]) -> str:
-    return f"CVStampV2={cv}"
+
+CV_STAMP_LITERAL = '{"purged_kfold":{"folds":5},"embargo_days":10,"nested_wf":{"windows":3},"seed":42}'
+
+def cv_stamp_str() -> str:
+    # Return exactly the SSOT literal (no spaces change, case-sensitive)
+    return CV_STAMP_LITERAL
