@@ -1,31 +1,43 @@
-\"\"\"engine_core/cv.py — CVStampV2 protocol (SSOT v8.2)
-- parse_cvstamp: dict -> normalized stamp
-- make_splits: dataset meta + stamp -> (train_idx, test_idx) tuples
-NOTE: Purged K-Fold + Embargo + (stub) Nested WF; full logic to be filled.
-\"\"\"
-from __future__ import annotations
-from typing import Dict, Any, List, Tuple
+# encoding: utf-8
+# SSOT v8.2 LOCK: CVStampV2 literal & schema-aligned helpers
+import math, pandas as pd
 
-def parse_cvstamp(stamp: Dict[str, Any]) -> Dict[str, Any]:
-    # Expected minimal keys (literal orientation kept)
-    out = {
-        "purged_kfold": dict(stamp.get("purged_kfold", {})),
-        "embargo_days": int(stamp.get("embargo_days", 0)),
-        "nested_wf": dict(stamp.get("nested_wf", {})),
-        "seed": int(stamp.get("seed", 42)),
+def make_cv_stamp(folds=5, embargo_days=10, windows=3, seed=42):
+    return {
+        "purged_kfold": {"folds": int(folds)},
+        "embargo_days": int(embargo_days),
+        "nested_wf": {"windows": int(windows)},
+        "seed": int(seed),
     }
-    return out
 
-def make_splits(n: int, stamp: Dict[str, Any]) -> List[Tuple[List[int], List[int]]]:
-    # Minimal stub: 2-fold split without leakage (placeholder; replace with PurgedKFold+Embargo)
-    k = max(2, int(stamp.get("purged_kfold", {}).get("folds", 2)))
-    fold = n // k
-    splits=[]
-    for i in range(k):
-        test_start=i*fold
-        test_end = n if i==k-1 else (i+1)*fold
-        test_idx=list(range(test_start, test_end))
-        train_idx=list(range(0, test_start)) + list(range(test_end, n))
-        # embargo stub (no-op)
-        splits.append((train_idx, test_idx))
-    return splits
+def _adjust_for_length(n_bars, folds, windows, embargo_days):
+    # Exception policy (SSOT): folds := max(2, floor(len/250)), windows := max(1, floor(len/(folds*250))), embargo_days >= 5
+    adj_folds = max(2, int(math.floor(n_bars/250))) if n_bars>0 else max(2, folds)
+    adj_windows = max(1, int(math.floor(n_bars / max(adj_folds*250,1)))) if n_bars>0 else max(1, windows)
+    adj_embargo = max(5, int(embargo_days))
+    return adj_folds, adj_windows, adj_embargo
+
+def split_purged_kfold(index: pd.Index, folds=5, embargo_days=10):
+    n = len(index)
+    folds, _, embargo_days = _adjust_for_length(n, folds, 1, embargo_days)
+    fold_size = max(1, n // folds)
+    for k in range(folds):
+        start = k*fold_size
+        end = (k+1)*fold_size if k < folds-1 else n
+        test_idx = index[start:end]
+        left = max(0, start - embargo_days)
+        right = min(n, end + embargo_days)
+        train_idx = index[0:left].append(index[right:n])
+        yield train_idx, test_idx
+
+def split_nested_walkforward(index: pd.Index, windows=3, folds=5, embargo_days=10):
+    n = len(index)
+    folds, windows, embargo_days = _adjust_for_length(n, folds, windows, embargo_days)
+    wf_size = max(1, n // windows)
+    for w in range(windows):
+        start = w*wf_size
+        end = (w+1)*wf_size if w < windows-1 else n
+        wf_idx = index[start:end]
+        # inside each WF window, do purged k-fold on the segment
+        for tr, te in split_purged_kfold(wf_idx, folds=folds, embargo_days=embargo_days):
+            yield tr, te
