@@ -62,10 +62,14 @@ New-Json $report | Write-FileUtf8 -Path $ReportPath
 $flagPath = Join-Path $BASE "gate_pass.flag"
 & $gate -ReportPath $ReportPath -OutFlag $flagPath
 
-if($overallPass){
-  Write-Host "✅ CI($t) PASS — report: $ReportPath, flag: $flagPath"
-  exit 0
+# --- graceful termination (CI vs Local) ---
+$code = $(if($overallPass){0}else{1})
+if($env:GITHUB_ACTIONS -eq "true"){
+  # GitHub Actions 등 CI 환경: 종료코드로 종료
+  exit $code
 }else{
-  Write-Host "❌ CI($t) FAIL — report: $ReportPath"
-  exit 1
+  # 로컬 인터랙티브: 창 자동 종료 금지, 종료코드만 반환
+  Write-Host "Local run (no auto-close). ExitCode=$code"
+  return $code
 }
+
