@@ -55,25 +55,25 @@ if(-not $details.ContainsKey("engine")){ Append-Detail -Details $details -Key "e
 
 # Compose summary & report object
 # === BEGIN: DETERMINISTIC REPORT WRITE BLOCK ===
-# (1) details 최소 보장
+# 1) Ensure details and at least engine key presence
 if(-not $details){ $details = @{} }
 if(-not $details.ContainsKey("engine")){ $details.engine = @{ note = "engine smoke executed" } }
 
-# (2) summary를 명시적으로 구성 (결정론적)
+# 2) Compose summary deterministically
 $summary = [ordered]@{
   pass      = $overallPass
   target    = $t
   timestamp = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
 }
 
-# (3) 리포트 객체(PSCustomObject) → JSON
+# 3) Compose report object and write JSON
 $report = [pscustomobject]@{
   summary = $summary
   details = $details
 }
 ($report | ConvertTo-Json -Depth 12 -Compress) | Set-Content -Path $ReportPath -Encoding UTF8
 
-# (4) Gate 연동: report 존재 시에만
+# 4) Gate linkage (only if report exists)
 $flagPath = Join-Path $BASE "gate_pass.flag"
 if(Test-Path $ReportPath){
   & $gate -ReportPath $ReportPath -OutFlag $flagPath
@@ -81,18 +81,13 @@ if(Test-Path $ReportPath){
   Write-Warning "report not found — skip gate"
 }
 
-# (5) 로컬/CI 종료 동작 통일
+# 5) Termination policy: CI exits; Local returns without closing window
 $code = $(if($overallPass){0}else{1})
-if($env:GITHUB_ACTIONS -eq "true"){ exit $code } else {
+if($env:GITHUB_ACTIONS -eq "true"){
+  exit $code
+}else{
   Write-Host "Local run (no auto-close). ExitCode=$code"
   $global:LASTEXITCODE = $code
   return $code
 }
 # === END: DETERMINISTIC REPORT WRITE BLOCK ===
-}
-}
-
-
-
-
-
