@@ -61,8 +61,20 @@ function Run-Engine {
 
 switch($t){
   "engine" {
-    $e = Run-Engine -BASE $BASE
-    $details.engine = @{ smoke_exit = $e; note = "0 means all assertions passed" }
+    $details = @{}
+    $overallPass = $true
+    $info = Run-Engine -BASE $BASE
+    $details.engine = $info
+    $overallPass = ($info.smoke_exit -eq 0)
+  }
+  "all" {
+    $details = @{}
+    $overallPass = $true
+    $info = Run-Engine -BASE $BASE
+    $details.engine = $info
+    $overallPass = ($info.smoke_exit -eq 0)
+  }
+}
     if($e -ne 0){ $overallPass = $false }
   }
   "all" {
@@ -116,4 +128,5 @@ if($env:GITHUB_ACTIONS -eq "true"){
   return $code
 }
 # === END: DETERMINISTIC REPORT WRITE BLOCK ===
+
 
