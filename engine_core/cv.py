@@ -3,16 +3,15 @@
 # - CVStampV2 literal maker
 # - Exception policy adjustment for short series
 # - effective_cv_stamp(): stamp reflecting ACTUAL applied values (traceability)
-# - Splitters: purged k-fold, nested walk-forward
+# - Splitters: purged k-fold, nested walk-forward (pandas 2.x compliant)
 
 import math
+import numpy as np
 import pandas as pd
 from typing import Dict, Iterator, Tuple
 
 def make_cv_stamp(folds: int = 5, embargo_days: int = 10, windows: int = 3, seed: int = 42) -> Dict:
-    """
-    Return base CVStampV2 literal (may be adjusted by effective_cv_stamp for actual use).
-    """
+    """Return base CVStampV2 literal (may be adjusted by effective_cv_stamp for actual use)."""
     return {
         "purged_kfold": {"folds": int(folds)},
         "embargo_days": int(embargo_days),
@@ -28,7 +27,6 @@ def _adjust_for_length(n_bars: int, folds: int, windows: int, embargo_days: int)
       - embargo_days >= 5
     """
     adj_folds = max(2, int(math.floor(n_bars/250))) if n_bars > 0 else max(2, folds)
-    # windows는 folds 확정 이후 계산
     denom = max(adj_folds * 250, 1)
     adj_windows = max(1, int(math.floor(n_bars / denom))) if n_bars > 0 else max(1, windows)
     adj_embargo = max(5, int(embargo_days))
@@ -36,8 +34,7 @@ def _adjust_for_length(n_bars: int, folds: int, windows: int, embargo_days: int)
 
 def effective_cv_stamp(index: pd.Index, base_stamp: Dict) -> Dict:
     """
-    Data index 길이에 기반하여 실제 적용될 folds/windows/embargo를 계산하고,
-    base_stamp의 seed를 유지하며 '실제 적용값'을 반환한다.
+    Data index 길이에 기반하여 실제 적용될 folds/windows/embargo를 계산해 반환.
     이 값을 Excel Params / Ledger / 로그에 기록해야 추적성 보장.
     """
     n = len(index)
@@ -54,10 +51,18 @@ def effective_cv_stamp(index: pd.Index, base_stamp: Dict) -> Dict:
         "seed": seed,
     }
 
+def _concat_index(a: pd.Index, b: pd.Index) -> pd.Index:
+    """pandas 2.x에서 Index.append 대체: 값 배열을 이어 붙여 동일 dtype의 Index 생성."""
+    if len(a) == 0: 
+        return pd.Index(b, dtype=b.dtype)
+    if len(b) == 0:
+        return pd.Index(a, dtype=a.dtype)
+    return pd.Index(np.concatenate([a.values, b.values]))
+
 def split_purged_kfold(index: pd.Index, folds: int = 5, embargo_days: int = 10) -> Iterator[Tuple[pd.Index, pd.Index]]:
     """
     Purged K-Fold splitter with embargo around test windows.
-    NOTE: 이 함수는 단독 사용 시에도 예외정책을 적용하여 folds/embargo를 보정한다.
+    NOTE: 예외정책을 적용하여 folds/embargo를 보정한다.
     """
     n = len(index)
     folds, _, embargo_days = _adjust_for_length(n, folds, 1, embargo_days)
@@ -68,10 +73,9 @@ def split_purged_kfold(index: pd.Index, folds: int = 5, embargo_days: int = 10) 
         test_idx = index[start:end]
         left = max(0, start - embargo_days)
         right = min(n, end + embargo_days)
-        # pandas >= 2: Index append deprecated; use union of slices via difference
         train_prefix = index[0:left]
         train_suffix = index[right:n]
-        train_idx = train_prefix.append(train_suffix)
+        train_idx = _concat_index(train_prefix, train_suffix)
         yield train_idx, test_idx
 
 def split_nested_walkforward(index: pd.Index, windows: int = 3, folds: int = 5, embargo_days: int = 10) -> Iterator[Tuple[pd.Index, pd.Index]]:
