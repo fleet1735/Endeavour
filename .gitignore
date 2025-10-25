@@ -47,3 +47,8 @@ agents/**/self_heal.ps1.bak_*
 agents/**/.DS_Store
 agents/**/desktop.ini
 
+
+# Controlled Docs (Gov only)
+CHANGE_LOG.md
+Migration_pack.md
+Migration_pack_v*.md
