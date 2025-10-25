@@ -1,6 +1,19 @@
 {
-  "ok": true,
-  "reasons": [],
-  "count": 2,
-  "path": "ledgers\\ledger_20251025_134330.json"
+  "summary": {
+    "note": "placeholder smoke pass",
+    "pass": true
+  },
+  "meta": {
+    "created_at": "2025-10-25T18:45:18",
+    "cv": {
+      "purged_kfold": {
+        "folds": 2
+      },
+      "seed": 42,
+      "embargo_days": 0,
+      "nested_wf": {
+        "windows": 0
+      }
+    }
+  }
 }
