@@ -1,0 +1,55 @@
+[
+  {
+    "name": "GC_Swing",
+    "params": {
+      "ma_fast": 50,
+      "ma_slow": 200
+    },
+    "cv": {
+      "purged_kfold": {
+        "folds": 5
+      },
+      "embargo_days": 10,
+      "nested_wf": {
+        "windows": 3
+      },
+      "seed": 42
+    },
+    "seed": 42,
+    "metrics": {
+      "CAGR": 0.0,
+      "MDD": 0.0,
+      "PF": 1.0,
+      "Sharpe": 0.0
+    },
+    "equity_len": 253,
+    "summary_hash": "22fe4147fe81d7ea627e8b627a708a592e5d50a21486f6bf29e9dca6feea2d73"
+  },
+  {
+    "name": "RSI_MR",
+    "params": {
+      "rsi": 14,
+      "th_low": 30,
+      "th_high": 70
+    },
+    "cv": {
+      "purged_kfold": {
+        "folds": 5
+      },
+      "embargo_days": 10,
+      "nested_wf": {
+        "windows": 3
+      },
+      "seed": 42
+    },
+    "seed": 42,
+    "metrics": {
+      "CAGR": 0.0,
+      "MDD": 0.0,
+      "PF": 1.0,
+      "Sharpe": 0.0
+    },
+    "equity_len": 253,
+    "summary_hash": "13760f9b97e6905ecfacec2e9a83975c24c81ad5bec069a905be2fd46fdd55d5"
+  }
+]

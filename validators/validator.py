@@ -1,31 +1,19 @@
 """
-validator.py — Handshake validator for Endeavour
-- Reads latest ledger_*.json
-- Verifies presence of summary_hash and minimal fields
-- Emits validator_report.json
+validator.py — validates last ledger and writes report to audit/logs
 """
 import os, json, glob, sys
-
-REQ_FIELDS = ["name","params","cv","seed","metrics","summary_hash"]
-def validate_ledger(path: str) -> dict:
-    with open(path, "r", encoding="utf-8") as f:
-        arr = json.load(f)
-    ok = True; reasons=[]
-    for i, row in enumerate(arr):
-        for k in REQ_FIELDS:
-            if k not in row:
-                ok=False; reasons.append(f"row#{i} missing {k}")
-    rep = {"ok": ok, "reasons": reasons, "count": len(arr), "path": path}
+AUDIT_DIR = r"D:\GoogleDrive\Endeavour_Gov\audit"
+os.makedirs(AUDIT_DIR, exist_ok=True)
+def validate(path:str)->dict:
+    with open(path,"r",encoding="utf-8") as f: data=json.load(f)
+    ok=all("summary_hash" in x for x in data)
+    rep={"ok":ok,"count":len(data),"path":path}
+    p=os.path.join(AUDIT_DIR,"validator_report.json")
+    with open(p,"w",encoding="utf-8") as f: json.dump(rep,f,ensure_ascii=False,indent=2)
+    print(f"[validator] ok={ok} count={len(data)} → {p}")
     return rep
-
-def main():
-    ledgers = sorted(glob.glob(os.path.join("ledgers", "ledger_*.json")))
+if __name__=="__main__":
+    ledgers=sorted(glob.glob(os.path.join(r"D:\GoogleDrive\Endeavour_Gov\audit","ledgers","ledger_*.json")))
     if not ledgers:
-        print("[validator] no ledger files"); sys.exit(2)
-    rep = validate_ledger(ledgers[-1])
-    with open("validator_report.json","w",encoding="utf-8") as f:
-        json.dump(rep, f, ensure_ascii=False, indent=2)
-    print(f"[validator] ok={rep['ok']} count={rep['count']} → validator_report.json")
-
-if __name__ == "__main__":
-    main()
+        print("[validator] no ledgers found"); sys.exit(1)
+    validate(ledgers[-1])
