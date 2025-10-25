@@ -8,3 +8,8 @@
 - Refactored dsl_checker.py to support new CLI flags (backward compatible).
 - Updated ontology_ci.yml to enforce CF-ONT-101/201 on push; unified artifact report.
 
+### [2025-10-25 13:42:43 +09:00] Sprint 3 bootstrap — engine_core & validator handshake
+- Added engine_core/parallel_backtest.py (vectorized/parallel-ready skeleton)
+- Added engine_core/cv.py, engine_core/metrics.py (stubs)
+- Added agents/reflex/gate_handshake.ps1, validators/validator.py
+- Provides ledger output + validator_report.json (handshake OK)
