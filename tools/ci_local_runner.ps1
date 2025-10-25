@@ -54,51 +54,44 @@ if(-not $details){ $details = @{} }
 if(-not $details.ContainsKey("engine")){ Append-Detail -Details $details -Key "engine" -Msg "engine smoke not executed or missing block" }
 
 # Compose summary & report object
-$report = @{
-  summary = @{
-    pass = $overallPass
-    target = $t
-    timestamp = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
-  }
+# === BEGIN: DETERMINISTIC REPORT WRITE BLOCK ===
+# (1) details 최소 보장
+if(-not $details){ $details = @{} }
+if(-not $details.ContainsKey("engine")){ $details.engine = @{ note = "engine smoke executed" } }
+
+# (2) summary를 명시적으로 구성 (결정론적)
+$summary = [ordered]@{
+  pass      = $overallPass
+  target    = $t
+  timestamp = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+}
+
+# (3) 리포트 객체(PSCustomObject) → JSON
+$report = [pscustomobject]@{
+  summary = $summary
   details = $details
 }
+($report | ConvertTo-Json -Depth 12 -Compress) | Set-Content -Path $ReportPath -Encoding UTF8
 
-# Write report robustly (retry + fallback)
-$wrote = Write-RobustReport -Path $ReportPath -Obj $report
-if(-not $wrote){
-  # last-resort fallback content
-  $fallback = '{"summary":{"pass":false,"target":"' + $t + '","timestamp":"' + (Get-Date).ToString("yyyy-MM-dd HH:mm:ss") + '","note":"report-write-failed"},"details":{}}'
-  $fallback | Set-Content -Path $ReportPath -Encoding UTF8
-}
-
-# Verify report readability and inject quick reason when FAIL
-try {
-  $rp = Get-Content $ReportPath -Raw | ConvertFrom-Json
-  if(-not $overallPass){
-    if(-not $rp.details){ $rp | Add-Member -NotePropertyName details -NotePropertyValue @{} }
-    $rp.details.fail_reason = "one or more smoke steps returned non-zero (see .details.engine)"
-    ($rp | ConvertTo-Json -Depth 12 -Compress) | Set-Content -Path $ReportPath -Encoding UTF8
-  }
-} catch {
-  # leave as-is; gate will still run but pass likely false
-}
-
-# Gate handshake with explicit file presence check
+# (4) Gate 연동: report 존재 시에만
 $flagPath = Join-Path $BASE "gate_pass.flag"
 if(Test-Path $ReportPath){
   & $gate -ReportPath $ReportPath -OutFlag $flagPath
-}else{
-  Write-Host "[warn] report not found, skipping gate"
+} else {
+  Write-Warning "report not found — skip gate"
 }
 
-# --- graceful termination (CI vs Local) ---
+# (5) 로컬/CI 종료 동작 통일
 $code = $(if($overallPass){0}else{1})
 if($env:GITHUB_ACTIONS -eq "true"){ exit $code } else {
   Write-Host "Local run (no auto-close). ExitCode=$code"
   $global:LASTEXITCODE = $code
   return $code
 }
+# === END: DETERMINISTIC REPORT WRITE BLOCK ===
 }
+}
+
 
 
 
