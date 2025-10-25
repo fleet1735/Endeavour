@@ -1,1 +1,1 @@
-
+{"summary":{"pass":true,"target":"all","timestamp":"2025-10-25 22:05:43"},"details":{"engine":{"err_log":"D:\\Endeavour_Dev\\logs\\smoke_engine_20251025_220541.err.log","log_tail":{"stdout":"OK: imports\nOK: cv purged_kfold folds= 4 embargo= 10 lens: 740 250\nOK: cv nested_wf windows= 1 iters: 4\nvectorbt present","stderr":""},"out_log":"D:\\Endeavour_Dev\\logs\\smoke_engine_20251025_220541.out.log","smoke_exit":0}}}

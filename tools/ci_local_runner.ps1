@@ -4,7 +4,6 @@ param(
   [string]$ReportPath = ""
 )
 
-function New-Json([hashtable]$obj){ ($obj | ConvertTo-Json -Depth 10) }
 function Write-FileUtf8($Path, [string]$Content){
   $dir = Split-Path -Parent $Path
   if(!(Test-Path $dir)){ New-Item -ItemType Directory -Force -Path $dir | Out-Null }
@@ -21,9 +20,9 @@ $gate  = Join-Path $tools "gate_handshake.ps1"
 if(!(Test-Path $smoke)){ throw "Smoke script not found: $smoke" }
 if(!(Test-Path $gate )){ throw "Gate script not found:  $gate"  }
 
-$overallPass = $true
-$details = @{}
-
+# ------------------------------------
+# Run-Engine (stdout/stderr 캡처 포함)
+# ------------------------------------
 function Run-Engine {
   param([string]$BASE)
   $tools = Join-Path $BASE "tools"
@@ -38,87 +37,66 @@ function Run-Engine {
 
   Push-Location $BASE
   $env:PYTHONPATH = "$BASE;$($env:PYTHONPATH)"
-  # 표준출력/표준에러를 각각 파일에 기록
   & $smoke -N 1000 -BASE $BASE 1> $outLog 2> $errLog
   $exit = $LASTEXITCODE
   Pop-Location
 
-  # tail 100줄 수집
   $tailOut = (Get-Content $outLog -Tail 100 -ErrorAction SilentlyContinue) -join "`n"
   $tailErr = (Get-Content $errLog -Tail 100 -ErrorAction SilentlyContinue) -join "`n"
 
-  # details.engine 필드에 넣기 위해 해시 리턴
   return @{
     smoke_exit = $exit
-    out_log = $outLog
-    err_log = $errLog
-    log_tail = @{
-      stdout = $tailOut
-      stderr = $tailErr
-    }
+    out_log    = $outLog
+    err_log    = $errLog
+    log_tail   = @{ stdout = $tailOut; stderr = $tailErr }
   }
 }
 
+# ------------------------------------
+# 집계 (engine/all 동일 정책)
+# ------------------------------------
+$details = @{}
 switch($t){
   "engine" {
-    $details = @{}
-    $overallPass = $true
     $info = Run-Engine -BASE $BASE
     $details.engine = $info
     $overallPass = ($info.smoke_exit -eq 0)
   }
   "all" {
-    $details = @{}
-    $overallPass = $true
     $info = Run-Engine -BASE $BASE
     $details.engine = $info
     $overallPass = ($info.smoke_exit -eq 0)
   }
 }
-    if($e -ne 0){ $overallPass = $false }
-  }
-  "all" {
-    # 현재는 engine만 포함. 추후 validator/export 등 단계 추가 예정.
-    $e = Run-Engine -BASE $BASE
-    $details.engine = @{ smoke_exit = $e; note = "0 means all assertions passed" }
-    if($e -ne 0){ $overallPass = $false }
-  }
-}
 
-# Compose details if missing
-if(-not $details){ $details = @{} }
-# Ensure engine block has some note for visibility
-if(-not $details.ContainsKey("engine")){ Append-Detail -Details $details -Key "engine" -Msg "engine smoke not executed or missing block" }
-
-# Compose summary & report object
 # === BEGIN: DETERMINISTIC REPORT WRITE BLOCK ===
-# 1) Ensure details and at least engine key presence
+# 최소 details 보장
 if(-not $details){ $details = @{} }
 if(-not $details.ContainsKey("engine")){ $details.engine = @{ note = "engine smoke executed" } }
 
-# 2) Compose summary deterministically
+# summary 결정론 구성
 $summary = [ordered]@{
   pass      = $overallPass
   target    = $t
   timestamp = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
 }
 
-# 3) Compose report object and write JSON
+# 리포트 JSON 기록
 $report = [pscustomobject]@{
   summary = $summary
   details = $details
 }
 ($report | ConvertTo-Json -Depth 12 -Compress) | Set-Content -Path $ReportPath -Encoding UTF8
 
-# 4) Gate linkage (only if report exists)
+# Gate 동기화: FAIL이면 플래그 삭제, PASS면 생성/갱신
 $flagPath = Join-Path $BASE "gate_pass.flag"
-if(Test-Path $ReportPath){
+if(-not $overallPass){
+  if(Test-Path $flagPath){ Remove-Item $flagPath -Force -ErrorAction SilentlyContinue }
+}else{
   & $gate -ReportPath $ReportPath -OutFlag $flagPath
-} else {
-  Write-Warning "report not found — skip gate"
 }
 
-# 5) Termination policy: CI exits; Local returns without closing window
+# 종료 정책: CI=exit, Local=return (창 유지 + 코드 반영)
 $code = $(if($overallPass){0}else{1})
 if($env:GITHUB_ACTIONS -eq "true"){
   exit $code
@@ -128,6 +106,3 @@ if($env:GITHUB_ACTIONS -eq "true"){
   return $code
 }
 # === END: DETERMINISTIC REPORT WRITE BLOCK ===
-
-
-
