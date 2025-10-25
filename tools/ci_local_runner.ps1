@@ -15,7 +15,6 @@ if([string]::IsNullOrWhiteSpace($ReportPath)){
   $ReportPath = Join-Path $BASE "ci_report.json"
 }
 
-# Ensure paths
 $tools = Join-Path $BASE "tools"
 $smoke = Join-Path $tools "smoke_engine.ps1"
 $gate  = Join-Path $tools "gate_handshake.ps1"
@@ -25,29 +24,30 @@ if(!(Test-Path $gate )){ throw "Gate script not found:  $gate"  }
 $overallPass = $true
 $details = @{}
 
+function Run-Engine {
+  param([string]$BASE)
+  $env:PYTHONPATH = "$BASE;$($env:PYTHONPATH)"
+  Push-Location $BASE
+  & (Join-Path $BASE "tools\smoke_engine.ps1") -N 1000 -BASE $BASE
+  $exit = $LASTEXITCODE
+  Pop-Location
+  return $exit
+}
+
 switch($t){
   "engine" {
-    # Run smoke (imports, CV consistency, vectorbt presence)
-    $env:PYTHONPATH = "$BASE;$($env:PYTHONPATH)"
-    Push-Location $BASE
-
-    # smoke_engine.ps1 내부가 3개 파이썬 블록을 실행:
-    # 각 블록 실패 시 python은 non-zero로 종료 -> $LASTEXITCODE로 감지
-    & $smoke -N 1000 -BASE $BASE
-    $exitCode = $LASTEXITCODE
-    Pop-Location
-
-    $passed = ($exitCode -eq 0)
-    $details.engine = @{ smoke_exit = $exitCode; note = "0 means all assertions passed" }
-    if(-not $passed){ $overallPass = $false }
+    $e = Run-Engine -BASE $BASE
+    $details.engine = @{ smoke_exit = $e; note = "0 means all assertions passed" }
+    if($e -ne 0){ $overallPass = $false }
   }
   "all" {
-    # 확장 시 다른 타깃도 추가
-    Write-Host "[info] only 'engine' target implemented currently."
+    # 현재는 engine만 포함. 추후 validator/export 등 단계 추가 예정.
+    $e = Run-Engine -BASE $BASE
+    $details.engine = @{ smoke_exit = $e; note = "0 means all assertions passed" }
+    if($e -ne 0){ $overallPass = $false }
   }
 }
 
-# Compose report.json (gate가 참조하는 summary.pass 필드 포함)
 $report = @{
   summary = @{
     pass = $overallPass
@@ -58,14 +58,14 @@ $report = @{
 }
 New-Json $report | Write-FileUtf8 -Path $ReportPath
 
-# Gate handshake: summary.pass=true면 flag 생성
+# gate_handshake 연동: summary.pass=true -> flag 생성
 $flagPath = Join-Path $BASE "gate_pass.flag"
 & $gate -ReportPath $ReportPath -OutFlag $flagPath
 
 if($overallPass){
-  Write-Host "✅ CI(engine) PASS — report: $ReportPath, flag: $flagPath"
+  Write-Host "✅ CI($t) PASS — report: $ReportPath, flag: $flagPath"
   exit 0
 }else{
-  Write-Host "❌ CI(engine) FAIL — report: $ReportPath"
+  Write-Host "❌ CI($t) FAIL — report: $ReportPath"
   exit 1
 }
