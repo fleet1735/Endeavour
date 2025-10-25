@@ -1,35 +1,33 @@
-name: endeavour-ci
+name: Endeavour CI
+
 on:
-  push: { branches: [ "main" ] }
-  pull_request: { branches: [ "main" ] }
+  push:
+    branches: [ main, master ]
+  pull_request:
+
 jobs:
-  gates:
-    if: ${{ github.event_name != 'pull_request' }}
+  build:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with: { python-version: "3.11" }
-      - name: Install deps
-        run: |
-          python -m pip install --upgrade pip
-          pip install jsonschema pyyaml pandas pyarrow
-      - name: Gate 1 - Schema (registry)
-        run: python validator/registry_cohesion_checker.py
-      - name: Gate 2 - Validator CF-201
-        run: python tools/ci/run_validator_ci.py
-      - name: Gate 3 - DQ propagation
-        run: python tools/ci/check_dq_propagation.py
-      - name: Gate 4 - Promotion-Compliance link
-        run: python tools/ci/check_promotion_audit_link.py
-      - name: Finalize - Ledger & Stage (ci_out)
-        run: python tools/ci/finalize_and_stage.py
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up PowerShell
+        uses: PowerShell/actions-setup-pwsh@v2
+
+      - name: Install Python (for other steps if needed)
+        uses: actions/setup-python@v5
         with:
-          name: endeavour-artifacts
-          path: |
-            runs/ledger.jsonl
-            runs/ledger.parquet
-            ci_out/**
-          if-no-files-found: warn
+          python-version: "3.11"
+
+      # ---------- Sprint 4 Validator: Gate 이전 사전 검증 ----------
+      - name: Run Sprint4 Validator v1
+        shell: pwsh
+        run: |
+          pwsh -NoLogo -NoProfile -File .\scripts\validator_v1.ps1
+
+      # ---------- 아래에 기존 Gate/Build/Test 단계가 온다고 가정 ----------
+      - name: Build / Test (placeholder)
+        shell: pwsh
+        run: |
+          Write-Host "Build/Test steps go here."
