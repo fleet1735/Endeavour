@@ -26,12 +26,37 @@ $details = @{}
 
 function Run-Engine {
   param([string]$BASE)
-  $env:PYTHONPATH = "$BASE;$($env:PYTHONPATH)"
+  $tools = Join-Path $BASE "tools"
+  $smoke = Join-Path $tools "smoke_engine.ps1"
+  if(!(Test-Path $smoke)){ throw "Smoke script not found: $smoke" }
+
+  $logDir = Join-Path $BASE "logs"
+  if(!(Test-Path $logDir)){ New-Item -ItemType Directory -Force -Path $logDir | Out-Null }
+  $ts = (Get-Date -Format "yyyyMMdd_HHmmss")
+  $outLog = Join-Path $logDir ("smoke_engine_" + $ts + ".out.log")
+  $errLog = Join-Path $logDir ("smoke_engine_" + $ts + ".err.log")
+
   Push-Location $BASE
-  & (Join-Path $BASE "tools\smoke_engine.ps1") -N 1000 -BASE $BASE
+  $env:PYTHONPATH = "$BASE;$($env:PYTHONPATH)"
+  # 표준출력/표준에러를 각각 파일에 기록
+  & $smoke -N 1000 -BASE $BASE 1> $outLog 2> $errLog
   $exit = $LASTEXITCODE
   Pop-Location
-  return $exit
+
+  # tail 100줄 수집
+  $tailOut = (Get-Content $outLog -Tail 100 -ErrorAction SilentlyContinue) -join "`n"
+  $tailErr = (Get-Content $errLog -Tail 100 -ErrorAction SilentlyContinue) -join "`n"
+
+  # details.engine 필드에 넣기 위해 해시 리턴
+  return @{
+    smoke_exit = $exit
+    out_log = $outLog
+    err_log = $errLog
+    log_tail = @{
+      stdout = $tailOut
+      stderr = $tailErr
+    }
+  }
 }
 
 switch($t){
@@ -91,3 +116,4 @@ if($env:GITHUB_ACTIONS -eq "true"){
   return $code
 }
 # === END: DETERMINISTIC REPORT WRITE BLOCK ===
+
