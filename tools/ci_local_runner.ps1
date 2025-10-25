@@ -70,6 +70,8 @@ if($env:GITHUB_ACTIONS -eq "true"){
 }else{
   # 로컬 인터랙티브: 창 자동 종료 금지, 종료코드만 반환
   Write-Host "Local run (no auto-close). ExitCode=$code"
+$global:LASTEXITCODE = $code
   return $code
 }
+
 
